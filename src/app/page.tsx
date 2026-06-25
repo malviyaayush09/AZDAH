@@ -305,9 +305,8 @@ export default function HomePage() {
       }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 28px', height: 72, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
           {/* Logo */}
-          <button onClick={() => scrollTo('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'baseline', gap: 7 }}>
-            <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 24, letterSpacing: '0.22em', color: CREAM }}>AZDAH</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: ORANGE, display: 'inline-block', transform: 'translateY(-1px)', flexShrink: 0 }} />
+          <button onClick={() => scrollTo('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <img src="/logo.jpeg" alt="AZDAH" style={{ height: 36, width: 'auto', display: 'block', filter: 'grayscale(1) brightness(2) contrast(10) invert(1)' }} />
           </button>
 
           {/* Desktop links */}
@@ -728,9 +727,8 @@ export default function HomePage() {
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 40, marginBottom: 60 }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 14 }}>
-                <span style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 22, letterSpacing: '0.22em', color: CREAM }}>AZDAH</span>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: ORANGE, display: 'inline-block', transform: 'translateY(-1px)' }} />
+              <div style={{ marginBottom: 14 }}>
+                <img src="/logo.jpeg" alt="AZDAH" style={{ height: 32, width: 'auto', display: 'block', filter: 'grayscale(1) brightness(2) contrast(10) invert(1)', opacity: 0.75 }} />
               </div>
               <p style={{ color: MUTED, fontSize: 13.5, lineHeight: 1.65, maxWidth: 280, margin: 0 }}>
                 Movement, aerial arts & holistic fitness studio. Bangalore.

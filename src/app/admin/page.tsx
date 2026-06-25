@@ -250,7 +250,7 @@ export default function AdminPage() {
       {/* ── Navbar ── */}
       <nav style={{ height:54, background:'#131009', borderBottom:`1px solid ${BORDER}`, padding:'0 24px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <span style={{ fontSize:18, fontWeight:700, letterSpacing:'.18em', color:ORANGE, fontFamily:'Georgia,serif' }}>AZDAH</span>
+          <img src="/logo.jpeg" alt="AZDAH" style={{ height:28, width:'auto', display:'block', filter:'grayscale(1) brightness(2) contrast(10) invert(1)' }} />
           <span style={{ fontSize:9, background:`${ORANGE}22`, color:ORANGE, border:`1px solid ${ORANGE}40`, padding:'2px 7px', borderRadius:4, letterSpacing:'.12em', textTransform:'uppercase' }}>Admin</span>
         </div>
         <button onClick={logout} style={{ color:MUTED, fontSize:13, background:'none', border:'none', cursor:'pointer' }}>Logout</button>

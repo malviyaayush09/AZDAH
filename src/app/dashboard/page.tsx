@@ -199,7 +199,7 @@ export default function DashboardPage() {
 
       {/* ── Navbar ── */}
       <nav style={{height:54,background:'#131009',borderBottom:`1px solid ${BORDER}`,padding:'0 20px',display:'flex',alignItems:'center',justifyContent:'space-between',position:'sticky',top:0,zIndex:20}}>
-        <a href="/" style={{fontSize:18,fontWeight:700,letterSpacing:'.18em',color:ORANGE,fontFamily:'Georgia,serif',textDecoration:'none'}}>AZDAH</a>
+        <a href="/"><img src="/logo.jpeg" alt="AZDAH" style={{height:28,width:'auto',display:'block',filter:'grayscale(1) brightness(2) contrast(10) invert(1)'}}/></a>
         <div style={{display:'flex',alignItems:'center',gap:12}}>
           <button onClick={()=>{setShowPwModal(true);setPwMsg(null);setPwForm({current:'',newPw:'',confirm:''});}}
             title="Settings" style={{background:'none',border:'none',color:MUTED,cursor:'pointer',fontSize:17,lineHeight:1,padding:4}}
