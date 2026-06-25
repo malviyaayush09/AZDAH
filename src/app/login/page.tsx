@@ -68,7 +68,7 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div>
-          <a href="/"><img src="/logo.jpeg" alt="AZDAH" style={{ height: 34, width: 'auto', display: 'block', filter: 'grayscale(1) brightness(2) contrast(10) invert(1)' }} /></a>
+          <a href="/"><img src="/azdahlogo.png" alt="AZDAH" style={{ height: 34, width: 'auto', display: 'block', filter: 'none' }} /></a>
           <div style={{ width: 32, height: 2, background: '#E1542B', marginTop: 10, borderRadius: 999 }} />
         </div>
 
@@ -110,7 +110,7 @@ export default function LoginPage() {
 
           {/* Mobile logo (shown only on small screens) */}
           <div style={{ textAlign: 'center', marginBottom: 36 }}>
-            <a href="/"><img src="/logo.jpeg" alt="AZDAH" style={{ height: 30, width: 'auto', display: 'inline-block', filter: 'grayscale(1) brightness(2) contrast(10) invert(1)' }} /></a>
+            <a href="/"><img src="/azdahlogo.png" alt="AZDAH" style={{ height: 30, width: 'auto', display: 'inline-block', filter: 'none' }} /></a>
             <div style={{ width: 24, height: 2, background: '#E1542B', borderRadius: 999, margin: '8px auto 0' }} />
           </div>
 

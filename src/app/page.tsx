@@ -306,7 +306,7 @@ export default function HomePage() {
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 28px', height: 72, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20 }}>
           {/* Logo */}
           <button onClick={() => scrollTo('home')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-            <img src="/logo.jpeg" alt="AZDAH" style={{ height: 36, width: 'auto', display: 'block', filter: 'grayscale(1) brightness(2) contrast(10) invert(1)' }} />
+            <img src="/azdahlogo.png" alt="AZDAH" style={{ height: 36, width: 'auto', display: 'block', filter: 'none' }} />
           </button>
 
           {/* Desktop links */}
@@ -728,7 +728,7 @@ export default function HomePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 40, marginBottom: 60 }}>
             <div>
               <div style={{ marginBottom: 14 }}>
-                <img src="/logo.jpeg" alt="AZDAH" style={{ height: 32, width: 'auto', display: 'block', filter: 'grayscale(1) brightness(2) contrast(10) invert(1)', opacity: 0.75 }} />
+                <img src="/azdahlogo.png" alt="AZDAH" style={{ height: 32, width: 'auto', display: 'block', filter: 'none', opacity: 0.75 }} />
               </div>
               <p style={{ color: MUTED, fontSize: 13.5, lineHeight: 1.65, maxWidth: 280, margin: 0 }}>
                 Movement, aerial arts & holistic fitness studio. Bangalore.
