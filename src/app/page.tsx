@@ -61,6 +61,10 @@ const CSS = `
   .btn-orange:hover { background: #C7461F !important }
   .btn-outline:hover { background: rgba(225,84,43,0.1) !important }
   .disc-card:hover .disc-num { color: ${ORANGE} !important; transition: color 0.2s }
+  @keyframes waPulse {
+    0%,100% { box-shadow: 0 4px 20px rgba(37,211,102,0.45) }
+    50% { box-shadow: 0 4px 32px rgba(37,211,102,0.75), 0 0 0 8px rgba(37,211,102,0.12) }
+  }
 
   @media (max-width: 900px) {
     .hero-grid { grid-template-columns: 1fr !important }
@@ -123,6 +127,26 @@ const DISCIPLINES = [
   },
 ];
 
+// ─── GALLERY ─────────────────────────────────────────────────
+const GALLERY = [
+  { label: 'Aerial Silks', sub: 'Vertical Fitness', bg: 'linear-gradient(135deg,#1A1008 0%,#2A1510 100%)', accent: '#E1542B' },
+  { label: 'Pole Training', sub: 'Strength & Grace', bg: 'linear-gradient(135deg,#0D1018 0%,#151825 100%)', accent: '#3b82f6' },
+  { label: 'Core Lab', sub: 'Pilates & TRX', bg: 'linear-gradient(135deg,#0A1510 0%,#122018 100%)', accent: '#10b981' },
+  { label: 'Hip-Hop Dance', sub: 'Contemporary', bg: 'linear-gradient(135deg,#15100A 0%,#22160A 100%)', accent: '#f59e0b' },
+  { label: 'Aerial Hoop', sub: 'Lyra & Flow', bg: 'linear-gradient(135deg,#130A18 0%,#1E1025 100%)', accent: '#8b5cf6' },
+  { label: 'Yin & Breathwork', sub: 'Holistic', bg: 'linear-gradient(135deg,#0A1215 0%,#101C20 100%)', accent: '#06b6d4' },
+];
+
+// ─── FAQ ──────────────────────────────────────────────────────
+const FAQS = [
+  { q: 'Do I need prior experience to join?', a: 'Not at all. Every discipline at AZDAH has beginner-friendly batches. Our coaches will assess your level on day one and guide you into the right class.' },
+  { q: 'Can I try before buying a membership?', a: 'Yes! We offer a trial class. Reach out to us on WhatsApp and we will slot you into the next available session before you commit.' },
+  { q: 'What does the membership include?', a: 'All plans give you full access to every discipline — Aerial, Pole, Pilates, Dance, Yoga, and more. No per-class charges, no hidden fees.' },
+  { q: 'Can I freeze or pause my membership?', a: 'Yes, members can pause their membership for up to 15 days per plan cycle. Contact us on WhatsApp at least 24 hours in advance.' },
+  { q: 'What if I miss a class I booked?', a: 'You can cancel up to 2 hours before the class starts from your member dashboard. You also get one free reschedule per month.' },
+  { q: 'Is the payment secure?', a: 'All payments are processed through Razorpay with 256-bit SSL encryption. We never store your card details.' },
+];
+
 // ─── TESTIMONIALS ────────────────────────────────────────────
 const TESTIMONIALS = [
   {
@@ -146,6 +170,7 @@ export default function HomePage() {
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   // checkout
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
@@ -189,6 +214,18 @@ export default function HomePage() {
     setPayLoading(true);
     setCheckoutError('');
 
+    const trimmedName = form.name.trim();
+    if (trimmedName.length < 3) {
+      setCheckoutError('Please enter your full name (at least 3 characters).');
+      setPayLoading(false);
+      return;
+    }
+    if (/\d/.test(trimmedName)) {
+      setCheckoutError('Name should not contain numbers.');
+      setPayLoading(false);
+      return;
+    }
+
     const rawPhone = form.phone.replace(/\D/g, '');
     if (rawPhone.length !== 10) {
       setCheckoutError('Enter a valid 10-digit mobile number.');
@@ -201,9 +238,14 @@ export default function HomePage() {
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: selectedPlan.id, phone: fullPhone, name: form.name, email: form.email }),
+        body: JSON.stringify({ planId: selectedPlan.id, phone: fullPhone, name: trimmedName, email: form.email }),
       });
       const order = await orderRes.json();
+      if (orderRes.status === 409) {
+        setCheckoutError('This number already has an active membership. Please login instead.');
+        setPayLoading(false);
+        return;
+      }
       if (!orderRes.ok) throw new Error(order.error || 'Could not create order');
 
       await loadScript('https://checkout.razorpay.com/v1/checkout.js');
@@ -348,16 +390,42 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Right — image placeholder */}
+          {/* Right — visual panel */}
           <div className="hero-img-col anim-fadeup-2" style={{ position: 'relative' }}>
-            <div style={{ aspectRatio: '3/4', background: 'linear-gradient(160deg, #2A1F16 0%, #1A1510 60%, #0F0C09 100%)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(241,233,218,0.06)' }}>
-              <div style={{ textAlign: 'center', color: FAINT }}>
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.3 }}>
-                  <rect x="3" y="3" width="18" height="18" rx="2" stroke={CREAM} strokeWidth="1"/>
-                  <circle cx="8.5" cy="8.5" r="1.5" stroke={CREAM} strokeWidth="1"/>
-                  <path d="M21 15l-5-5L5 21" stroke={CREAM} strokeWidth="1" strokeLinecap="round"/>
-                </svg>
-                <p style={{ fontSize: 11, marginTop: 10, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Studio photo</p>
+            <div style={{ aspectRatio: '3/4', background: 'linear-gradient(160deg,#211810 0%,#1A1410 55%,#0F0C09 100%)', borderRadius: 4, border: '1px solid rgba(241,233,218,0.06)', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px 28px' }}>
+              {/* Background watermark */}
+              <div style={{ position: 'absolute', right: -20, top: '50%', transform: 'translateY(-50%)', fontFamily: SERIF, fontSize: 130, fontWeight: 900, color: 'rgba(225,84,43,0.04)', letterSpacing: '.06em', lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>AZ<br/>DA<br/>H</div>
+              {/* Orange glow */}
+              <div style={{ position: 'absolute', bottom: -60, left: -40, width: 280, height: 280, background: 'radial-gradient(circle,rgba(225,84,43,0.16) 0%,transparent 70%)', pointerEvents: 'none' }} />
+
+              {/* Top label */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 8px rgba(74,222,128,.7)' }} />
+                <span style={{ fontSize: 11, color: MUTED, letterSpacing: '.16em', textTransform: 'uppercase' }}>Now enrolling</span>
+              </div>
+
+              {/* Centre quote */}
+              <div style={{ position: 'relative' }}>
+                <div style={{ fontFamily: SERIF, fontSize: 13, color: ORANGE, letterSpacing: '.18em', textTransform: 'uppercase', marginBottom: 16 }}>Philosophy</div>
+                <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 26, lineHeight: 1.35, color: CREAM, margin: 0 }}>
+                  &ldquo;Your body is<br />capable of<br />
+                  <em style={{ color: ORANGE }}>far more.</em>&rdquo;
+                </p>
+              </div>
+
+              {/* Discipline tags */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
+                {[
+                  { icon: '🪢', label: 'Aerial Silks & Hoop', color: '#E1542B' },
+                  { icon: '💪', label: 'Core & Strength Lab', color: '#3b82f6' },
+                  { icon: '🧘', label: 'Yoga & Breathwork', color: '#10b981' },
+                  { icon: '🕺', label: 'Dance & Hip-Hop', color: '#f59e0b' },
+                ].map(d => (
+                  <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(241,233,218,0.07)', borderLeft: `3px solid ${d.color}`, borderRadius: 2 }}>
+                    <span style={{ fontSize: 16 }}>{d.icon}</span>
+                    <span style={{ fontSize: 13, color: CREAM, fontWeight: 500 }}>{d.label}</span>
+                  </div>
+                ))}
               </div>
             </div>
             {/* Floating badge */}
@@ -460,6 +528,32 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── GALLERY ── */}
+      <section style={{ background: DARK, padding: '100px 28px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>The studio</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 48, flexWrap: 'wrap', gap: 20 }}>
+            <h2 style={{ fontFamily: SERIF, fontSize: 48, fontWeight: 800, color: CREAM, margin: 0, lineHeight: 1.05 }}>
+              Where it all<br />happens.
+            </h2>
+            <p style={{ color: MUTED, fontSize: 14, lineHeight: 1.7, maxWidth: 340, margin: 0 }}>
+              A space designed for movement — equipped with professional-grade aerial rigs, sprung floors, and natural light.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gridTemplateRows: 'auto auto', gap: 8 }}>
+            {GALLERY.map((g, i) => (
+              <div key={g.label} style={{ background: g.bg, border: `1px solid ${g.accent}18`, borderRadius: 2, padding: '40px 28px', position: 'relative', overflow: 'hidden', gridColumn: i === 3 ? 'span 2' : 'span 1', minHeight: i === 3 ? 180 : 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <div style={{ position: 'absolute', top: 16, right: 16, width: 8, height: 8, borderRadius: '50%', background: g.accent, opacity: .7 }} />
+                <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle,${g.accent}18 0%,transparent 70%)`, pointerEvents: 'none' }} />
+                <div style={{ fontSize: 11, color: g.accent, letterSpacing: '.18em', textTransform: 'uppercase', marginBottom: 6, fontWeight: 600 }}>{g.sub}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: CREAM }}>{g.label}</div>
+              </div>
+            ))}
+          </div>
+          <p style={{ color: FAINT, fontSize: 12, textAlign: 'center', marginTop: 20 }}>📸 Studio photography coming soon</p>
+        </div>
+      </section>
+
       {/* ── PRICING ── */}
       <section id="membership" style={{ background: DARK, padding: '100px 28px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -535,6 +629,37 @@ export default function HomePage() {
           )}
           <p style={{ color: FAINT, fontSize: 12, textAlign: 'center', marginTop: 32 }}>
             Secured by Razorpay · 100% safe payment · No auto-renewal
+          </p>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section style={{ background: '#111009', padding: '100px 28px' }}>
+        <div style={{ maxWidth: 760, margin: '0 auto' }}>
+          <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16, textAlign: 'center' }}>FAQ</p>
+          <h2 style={{ fontFamily: SERIF, fontSize: 42, fontWeight: 800, color: CREAM, margin: '0 0 56px', lineHeight: 1.1, textAlign: 'center' }}>Questions answered.</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {FAQS.map((faq, i) => {
+              const isOpen = openFaq === i;
+              return (
+                <div key={i} style={{ background: isOpen ? CARD : 'transparent', border: `1px solid ${isOpen ? 'rgba(225,84,43,0.25)' : 'rgba(241,233,218,0.08)'}`, borderRadius: 2, overflow: 'hidden', transition: 'border-color .2s,background .2s' }}>
+                  <button onClick={() => setOpenFaq(isOpen ? null : i)}
+                    style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, textAlign: 'left' }}>
+                    <span style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 600, color: isOpen ? CREAM : TAN, lineHeight: 1.4 }}>{faq.q}</span>
+                    <span style={{ color: ORANGE, fontSize: 20, flexShrink: 0, lineHeight: 1, transform: isOpen ? 'rotate(45deg)' : 'none', transition: 'transform .2s', display: 'inline-block' }}>+</span>
+                  </button>
+                  {isOpen && (
+                    <div style={{ padding: '0 24px 22px', color: MUTED, fontSize: 14.5, lineHeight: 1.75 }}>{faq.a}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ color: MUTED, fontSize: 14, textAlign: 'center', marginTop: 48 }}>
+            Still have questions?{' '}
+            <a href="https://wa.me/919999999999" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, textDecoration: 'underline' }}>
+              Chat with us on WhatsApp →
+            </a>
           </p>
         </div>
       </section>
@@ -631,6 +756,16 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* ── FLOATING WHATSAPP ── */}
+      <a href="https://wa.me/919999999999" target="_blank" rel="noopener noreferrer"
+        title="Chat on WhatsApp"
+        style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 90, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(37,211,102,0.45)', textDecoration: 'none', animation: 'waPulse 2.5s ease-in-out infinite' }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.556 4.118 1.528 5.847L.057 23.882l6.196-1.624A11.93 11.93 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.787 9.787 0 01-4.988-1.365l-.358-.213-3.676.964.981-3.584-.233-.369A9.79 9.79 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+        </svg>
+      </a>
 
       {/* ── CHECKOUT MODAL ── */}
       {selectedPlan && (

@@ -13,6 +13,29 @@ export async function POST(req: NextRequest) {
 
   const db = getServiceClient();
 
+  // Name validation
+  const trimmedName = name.trim();
+  if (trimmedName.length < 3) {
+    return NextResponse.json({ error: 'Please enter your full name (at least 3 characters).' }, { status: 400 });
+  }
+  if (/\d/.test(trimmedName)) {
+    return NextResponse.json({ error: 'Name should not contain numbers.' }, { status: 400 });
+  }
+
+  // Duplicate active member check
+  const { data: existingMember } = await db
+    .from('members')
+    .select('id, plan_end, is_active')
+    .eq('phone', phone)
+    .maybeSingle();
+
+  if (existingMember) {
+    const planEnd = new Date(existingMember.plan_end);
+    if (planEnd > new Date() && existingMember.is_active) {
+      return NextResponse.json({ error: 'already_member' }, { status: 409 });
+    }
+  }
+
   // Fetch plan
   const { data: plan } = await db
     .from('membership_plans')

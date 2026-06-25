@@ -29,6 +29,12 @@ export async function POST(req: NextRequest) {
   if (cls.is_cancelled) return NextResponse.json({ error: 'Class is cancelled' }, { status: 400 });
   if (!member || !member.is_active) return NextResponse.json({ error: 'Membership inactive' }, { status: 403 });
 
+  // Check class hasn't already started
+  const classDateTime = new Date(`${cls.class_date}T${cls.start_time}`);
+  if (classDateTime < new Date()) {
+    return NextResponse.json({ error: 'This class has already started.' }, { status: 400 });
+  }
+
   // Check membership not expired
   if (member.plan_end && new Date(member.plan_end) < new Date()) {
     return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
