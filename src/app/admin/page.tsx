@@ -120,11 +120,21 @@ export default function AdminPage() {
     } else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
-  async function cancelClass(classId: string) {
-    if (!confirm('Cancel this class? Members will need to be notified manually.')) return;
-    const res = await fetch(`/api/admin/classes/${classId}/cancel`, { method: 'POST' });
+  async function cancelClass(cls: ClassSlot) {
+    // Open WhatsApp for each booked member with pre-filled cancellation message
+    if (classBookings.length > 0) {
+      const date = fmtDate(cls.class_date);
+      const time = fmtTime(cls.start_time);
+      classBookings.forEach(b => {
+        if (!b.member?.phone) return;
+        const name = b.member.name.split(' ')[0];
+        const text = encodeURIComponent(`Hi ${name}, your *${cls.title}* class scheduled on *${date} at ${time}* has been cancelled. Sorry for the inconvenience. Please contact us to reschedule. — AZDAH`);
+        window.open(`https://wa.me/${b.member.phone}?text=${text}`, '_blank');
+      });
+    }
+    const res = await fetch(`/api/admin/classes/${cls.id}/cancel`, { method: 'POST' });
     const data = await res.json();
-    if (data.success) { setMsg({ text: 'Class cancelled.', ok: true }); fetchAll(); setViewingClass(null); }
+    if (data.success) { setMsg({ text: `Class cancelled. WhatsApp opened for ${classBookings.length} member${classBookings.length !== 1 ? 's' : ''}.`, ok: true }); fetchAll(); setViewingClass(null); }
     else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
@@ -629,7 +639,7 @@ export default function AdminPage() {
                       style={{ padding:'8px 14px', fontSize:12, background:'none', border:`1px solid ${ORANGE}40`, color:ORANGE, borderRadius:6, cursor:'pointer' }}>
                       {dupBusy===viewingClass.id?'Duplicating…':'Duplicate +7d'}
                     </button>
-                    <button onClick={() => cancelClass(viewingClass.id)}
+                    <button onClick={() => cancelClass(viewingClass)}
                       style={{ padding:'8px 14px', fontSize:12, background:'none', border:'1px solid rgba(248,113,113,.3)', color:'#f87171', borderRadius:6, cursor:'pointer' }}>
                       Cancel Class
                     </button>
