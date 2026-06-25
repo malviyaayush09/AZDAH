@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const today = new Date().toISOString().split('T')[0];
 
   // Fetch upcoming classes + member's bookings in parallel
-  const [classRes, bookingRes] = await Promise.all([
+  const [classRes, bookingRes, waitlistRes] = await Promise.all([
     db
       .from('classes')
       .select('id, title, trainer_name, class_date, start_time, end_time, capacity')
@@ -30,9 +30,14 @@ export async function GET(req: NextRequest) {
       .select('id, class_id, status')
       .eq('member_id', memberId)
       .eq('status', 'confirmed'),
+    db
+      .from('waitlist')
+      .select('class_id')
+      .eq('member_id', memberId),
   ]);
 
   const bookingMap = new Map((bookingRes.data || []).map((b) => [b.class_id, { id: b.id, status: b.status }]));
+  const waitlistSet = new Set((waitlistRes.data || []).map((w) => w.class_id));
 
   // Fetch booking counts for all classes
   const classIds = (classRes.data || []).map((c) => c.id);
@@ -48,6 +53,7 @@ export async function GET(req: NextRequest) {
       booked_count: countMap.get(cls.id) || 0,
       my_booking_id: booking?.id || null,
       my_booking_status: booking?.status || null,
+      on_waitlist: waitlistSet.has(cls.id),
     };
   });
 
