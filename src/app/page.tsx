@@ -181,19 +181,17 @@ export default function HomePage() {
   const [memberCreds, setMemberCreds] = useState<{ phone: string; name: string; password: string } | null>(null);
 
   useEffect(() => {
-    supabase
-      .from('membership_plans')
-      .select('*')
-      .order('sort_order')
-      .then(({ data, error }) => {
+    (async () => {
+      try {
+        const { data, error } = await supabase.from('membership_plans').select('*').order('sort_order');
         if (error) console.error('Plans fetch error:', error.message);
         setPlans(data || []);
-        setLoadingPlans(false);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('Plans network error:', err);
+      } finally {
         setLoadingPlans(false);
-      });
+      }
+    })();
   }, []);
 
   const scrollTo = (id: string) => {
