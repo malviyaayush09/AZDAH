@@ -54,13 +54,18 @@ export async function POST(req: NextRequest) {
     .eq('class_id', classId)
     .single();
 
-  if (existing && existing.status === 'confirmed') {
-    return NextResponse.json({ error: 'Already booked for this class' }, { status: 400 });
+  if (existing) {
+    if (existing.status === 'confirmed') {
+      return NextResponse.json({ error: 'Already booked for this class' }, { status: 400 });
+    }
+    // Re-activate a previously cancelled/waitlisted booking; reset attended so admin marks fresh
+    const { error } = await db.from('bookings').update({ status: 'confirmed', attended: null }).eq('id', existing.id);
+    if (error) return NextResponse.json({ error: error.message || 'Booking failed' }, { status: 500 });
+  } else {
+    // Create new booking
+    const { error } = await db.from('bookings').insert({ member_id: memberId, class_id: classId, status: 'confirmed' });
+    if (error) return NextResponse.json({ error: error.message || 'Booking failed' }, { status: 500 });
   }
-
-  // Create booking
-  const { error } = await db.from('bookings').insert({ member_id: memberId, class_id: classId, status: 'confirmed' });
-  if (error) return NextResponse.json({ error: 'Booking failed' }, { status: 500 });
 
   // WhatsApp confirmation
   const dateStr = new Date(cls.class_date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
