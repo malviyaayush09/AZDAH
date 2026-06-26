@@ -6,8 +6,8 @@
   --bg: #0D0B08;
   --surface: #1A1410;
   --card: #211A13;
-  --orange: #E1542B;
-  --orange-light: #F06040;
+  --orange: #F83433;
+  --orange-light: #FF5049;
   --cream: #F5F0E8;
   --muted: #8A7A6A;
   --border: #2A2118;
@@ -20,7 +20,9 @@
 body {
   background-color: var(--bg);
   color: var(--cream);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Razorpay checkout iframe fix */

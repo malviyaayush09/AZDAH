@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3 } from 'lucide-react';
 
 type Member = {
   id: string; name: string; phone: string;
@@ -37,10 +38,11 @@ const CARD = '#1A1410';
 const BORDER = '#2A2118';
 const CREAM = '#F5F0E8';
 const MUTED = '#8A7A6A';
-const ORANGE = '#E1542B';
+const ORANGE = '#F83433';
+const SERIF = 'var(--font-bodoni), Georgia, serif';
 const FAINT = 'rgba(241,233,218,0.04)';
 
-const PALETTE = ['#E1542B','#3b82f6','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16'];
+const PALETTE = ['#F83433','#3b82f6','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16'];
 
 function avatarColor(name: string) {
   let h = 0;
@@ -91,8 +93,36 @@ export default function AdminPage() {
   const [revLoading, setRevLoading] = useState(false);
   const [attendanceBusy, setAttendanceBusy] = useState<string | null>(null);
   const [dupBusy, setDupBusy] = useState<string | null>(null);
+  const [statAnim, setStatAnim] = useState(0);
+  const [revAnim, setRevAnim] = useState(0);
 
   useEffect(() => { fetchAll(); }, []);
+
+  // Count-up animation for the overview stat cards (runs once stats arrive)
+  useEffect(() => {
+    if (!stats) return;
+    let raf: number; const start = performance.now(), dur = 900;
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / dur, 1);
+      setStatAnim(1 - Math.pow(1 - t, 3));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [stats]);
+
+  // Grow-in animation for the revenue bars (runs once revenue loads)
+  useEffect(() => {
+    if (!revenue) return;
+    let raf: number; const start = performance.now(), dur = 900;
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / dur, 1);
+      setRevAnim(1 - Math.pow(1 - t, 3));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [revenue]);
 
   async function fetchAll() {
     const [mRes, cRes] = await Promise.all([fetch('/api/admin/members'), fetch('/api/admin/classes')]);
@@ -219,6 +249,8 @@ export default function AdminPage() {
     const d = new Date(c.class_date + 'T00:00:00');
     return !c.is_cancelled && d >= weekDates[0] && d <= weekDates[6];
   }).length;
+  const todayClasses = classes.filter(c => c.class_date === todayStr && !c.is_cancelled)
+    .sort((a, b) => a.start_time.localeCompare(b.start_time));
 
   if (loading) return (
     <div style={{ minHeight:'100vh', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', color:MUTED, fontSize:14 }}>
@@ -245,6 +277,7 @@ export default function AdminPage() {
         ::-webkit-scrollbar{width:4px;height:4px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:#3A2B1E;border-radius:9px}
+        @media(max-width:900px){.admin-cal{grid-template-columns:1fr !important}}
       `}} />
 
       {/* ── Navbar ── */}
@@ -256,23 +289,27 @@ export default function AdminPage() {
         <button onClick={logout} style={{ color:MUTED, fontSize:13, background:'none', border:'none', cursor:'pointer' }}>Logout</button>
       </nav>
 
-      <div style={{ maxWidth:1240, margin:'0 auto', padding:'24px 16px' }}>
+      <div style={{ maxWidth:1240, margin:'0 auto', padding:'24px 20px' }}>
 
-        {/* ── Stats ── */}
+        {/* ── Heading ── */}
+        <h1 style={{ fontFamily:SERIF, fontSize:32, fontWeight:800, color:CREAM, margin:'0 0 6px', lineHeight:1.05, letterSpacing:'-.01em' }}>Studio overview</h1>
+        <p style={{ color:MUTED, fontSize:14, margin:'0 0 22px' }}>Members, bookings and revenue at a glance.</p>
+
+        {/* ── KPI Row ── */}
         {stats && (
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))', gap:12, marginBottom:24 }}>
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:16 }}>
             {[
-              { icon:'👥', label:'Total Members',       value:stats.total_members,  color:CREAM },
-              { icon:'✅', label:'Active Members',       value:stats.active_members, color:'#4ade80' },
-              { icon:'⏳', label:'Expiring in 7 days',  value:stats.expiring_soon,  color:stats.expiring_soon > 0 ? '#fbbf24' : CREAM },
-              { icon:'📅', label:'Classes This Week',   value:weekClassCount,        color:ORANGE },
-            ].map(s => (
-              <div key={s.label} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'18px 20px' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                  <span style={{ fontSize:20 }}>{s.icon}</span>
-                  <span style={{ fontSize:26, fontWeight:700, color:s.color }}>{s.value}</span>
+              { Icon: Users,        label:'Total Members',      value: stats.total_members,  color: CREAM },
+              { Icon: CheckCircle2, label:'Active Members',     value: stats.active_members, color: '#4ade80' },
+              { Icon: Clock,        label:'Expiring in 7 days', value: stats.expiring_soon,  color: stats.expiring_soon > 0 ? '#fbbf24' : CREAM },
+              { Icon: CalendarDays, label:'Classes This Week',  value: weekClassCount,       color: ORANGE },
+            ].map((s, i) => (
+              <div key={s.label} style={{ padding:'20px 24px', borderLeft: i > 0 ? `1px solid ${BORDER}` : 'none' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+                  <s.Icon size={14} color={MUTED} strokeWidth={1.5} />
+                  <div style={{ fontFamily:SERIF, fontSize:34, fontWeight:800, color:s.color, lineHeight:1, letterSpacing:'-.02em' }}>{Math.round(s.value*statAnim)}</div>
                 </div>
-                <div style={{ fontSize:11, color:MUTED, letterSpacing:'.04em' }}>{s.label}</div>
+                <div style={{ fontSize:10, color:MUTED, letterSpacing:'.06em', textTransform:'uppercase' }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -280,148 +317,200 @@ export default function AdminPage() {
 
         {/* ── Toast ── */}
         {msg && (
-          <div style={{ marginBottom:16, padding:'10px 14px', background: msg.ok ? 'rgba(74,222,128,.08)' : 'rgba(248,113,113,.08)', border:`1px solid ${msg.ok ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.25)'}`, borderRadius:7, fontSize:13, color: msg.ok ? '#4ade80' : '#f87171', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ marginBottom:14, padding:'10px 14px', background: msg.ok ? 'rgba(74,222,128,.08)' : 'rgba(248,113,113,.08)', border:`1px solid ${msg.ok ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.25)'}`, borderRadius:7, fontSize:13, color: msg.ok ? '#4ade80' : '#f87171', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             {msg.text}
             <button onClick={() => setMsg(null)} style={{ background:'none', border:'none', color:MUTED, cursor:'pointer', fontSize:16 }}>×</button>
           </div>
         )}
 
-        {/* ── Tabs ── */}
-        <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, marginBottom:24 }}>
-          {([['calendar','📅 Calendar'],['members','👥 Members'],['revenue','💰 Revenue'],['add-class','＋ Add Class']] as const).map(([k,l]) => (
+        {/* ── Tab bar ── */}
+        <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, marginBottom:20 }}>
+          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class']] as const).map(([k,l]) => (
             <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); }}
-              style={{ padding:'12px 20px', fontSize:13, fontWeight:500, color: tab===k ? ORANGE : MUTED, borderBottom: tab===k ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:-1 }}>
+              style={{ padding:'13px 20px', fontSize:13, fontWeight:500, color: tab===k ? ORANGE : MUTED, borderBottom: tab===k ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:-1 }}>
               {l}
             </button>
           ))}
         </div>
 
-        {/* ════════════════ CALENDAR TAB ════════════════ */}
+        {/* ════ CALENDAR TAB ════ */}
         {tab === 'calendar' && (
-          <>
-            {/* Week nav */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
-              <div style={{ display:'flex', gap:6 }}>
-                {[['← Prev', -7],['Today', 0],['Next →', 7]].map(([label, delta]) => (
-                  <button key={String(label)} className="abtn"
-                    onClick={() => {
-                      if (delta === 0) { setWeekStart(mondayOf(new Date())); return; }
-                      const d = new Date(weekStart); d.setDate(d.getDate() + (delta as number)); setWeekStart(d);
-                    }}
-                    style={{ padding:'7px 14px', background:CARD, border:`1px solid ${BORDER}`, color: label==='Today' ? MUTED : CREAM, borderRadius:6, fontSize:12, cursor:'pointer' }}>
-                    {label}
-                  </button>
-                ))}
+          <div className="admin-cal" style={{ display:'grid', gridTemplateColumns:'1fr 260px', gap:14 }}>
+
+            {/* Main calendar */}
+            <div>
+              {/* Week nav */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+                <div style={{ display:'flex', gap:6 }}>
+                  {[['← Prev', -7],['Today', 0],['Next →', 7]].map(([label, delta]) => (
+                    <button key={String(label)} className="abtn"
+                      onClick={() => {
+                        if (delta === 0) { setWeekStart(mondayOf(new Date())); return; }
+                        const d = new Date(weekStart); d.setDate(d.getDate() + (delta as number)); setWeekStart(d);
+                      }}
+                      style={{ padding:'7px 14px', background:CARD, border:`1px solid ${BORDER}`, color: label==='Today' ? MUTED : CREAM, borderRadius:6, fontSize:12, cursor:'pointer' }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <span style={{ fontSize:13, color:MUTED }}>
+                  {weekDates[0].toLocaleDateString('en-IN',{day:'numeric',month:'short'})} – {weekDates[6].toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
+                </span>
               </div>
-              <span style={{ fontSize:13, color:MUTED }}>
-                {weekDates[0].toLocaleDateString('en-IN',{day:'numeric',month:'short'})} – {weekDates[6].toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
-              </span>
-              <button className="abtn" onClick={() => setTab('add-class')}
-                style={{ padding:'8px 18px', background:ORANGE, color:'#fff', border:'none', borderRadius:7, fontSize:13, fontWeight:600 }}>
-                + Add Class
-              </button>
-            </div>
 
-            {/* 7-column grid */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
-              {weekDates.map((date, i) => {
-                const ds = toYMD(date);
-                const isToday = ds === todayStr;
-                const dayClasses = classes.filter(c => c.class_date === ds && !c.is_cancelled)
-                  .sort((a,b) => a.start_time.localeCompare(b.start_time));
-                const cancelledCnt = classes.filter(c => c.class_date === ds && c.is_cancelled).length;
-                return (
-                  <div key={i}>
-                    {/* Day header */}
-                    <div style={{ textAlign:'center', marginBottom:8, padding:'8px 4px', borderRadius:8, background: isToday ? `${ORANGE}12` : 'transparent', border: isToday ? `1px solid ${ORANGE}28` : '1px solid transparent' }}>
-                      <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.1em' }}>
-                        {date.toLocaleDateString('en-IN',{weekday:'short'})}
+              {/* 7-column grid */}
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
+                {weekDates.map((date, i) => {
+                  const ds = toYMD(date);
+                  const isToday = ds === todayStr;
+                  const dayClasses = classes.filter(c => c.class_date === ds && !c.is_cancelled)
+                    .sort((a,b) => a.start_time.localeCompare(b.start_time));
+                  const cancelledCnt = classes.filter(c => c.class_date === ds && c.is_cancelled).length;
+                  return (
+                    <div key={i}>
+                      <div style={{ textAlign:'center', marginBottom:8, padding:'8px 4px', borderRadius:8, background: isToday ? `${ORANGE}12` : 'transparent', border: isToday ? `1px solid ${ORANGE}28` : '1px solid transparent' }}>
+                        <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.1em' }}>
+                          {date.toLocaleDateString('en-IN',{weekday:'short'})}
+                        </div>
+                        <div style={{ fontSize:20, fontWeight:700, color: isToday ? ORANGE : CREAM, lineHeight:1.3, marginTop:2 }}>
+                          {date.getDate()}
+                        </div>
                       </div>
-                      <div style={{ fontSize:20, fontWeight:700, color: isToday ? ORANGE : CREAM, lineHeight:1.3, marginTop:2 }}>
-                        {date.getDate()}
-                      </div>
-                    </div>
-
-                    {/* Class blocks */}
-                    <div style={{ display:'flex', flexDirection:'column', gap:6, minHeight:60 }}>
-                      {dayClasses.length === 0 && (
-                        <div style={{ height:40, display:'flex', alignItems:'center', justifyContent:'center', color:'#2A2118', fontSize:18 }}>·</div>
-                      )}
-                      {dayClasses.map(cls => {
-                        const tc = trainerColor(cls.trainer_name);
-                        const pct = (cls.booked_count / cls.capacity) * 100;
-                        return (
-                          <div key={cls.id} className="cbk" onClick={() => openClassModal(cls)}
-                            style={{ background:`${tc}12`, border:`1px solid ${tc}30`, borderLeft:`3px solid ${tc}`, borderRadius:7, padding:'9px 8px' }}>
-                            <div style={{ fontSize:11, fontWeight:600, color:CREAM, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.title}</div>
-                            <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{fmtTime(cls.start_time)}</div>
-                            {cls.trainer_name && <div style={{ fontSize:10, color:tc, marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.trainer_name}</div>}
-                            <div style={{ marginTop:5, height:3, background:'rgba(255,255,255,.06)', borderRadius:999, overflow:'hidden' }}>
-                              <div style={{ height:'100%', width:`${pct}%`, background:tc, borderRadius:999, transition:'width .3s' }} />
+                      <div style={{ display:'flex', flexDirection:'column', gap:6, minHeight:60 }}>
+                        {dayClasses.length === 0 && (
+                          <div style={{ height:40, display:'flex', alignItems:'center', justifyContent:'center', color:'#2A2118', fontSize:18 }}>·</div>
+                        )}
+                        {dayClasses.map(cls => {
+                          const tc = trainerColor(cls.trainer_name);
+                          const pct = (cls.booked_count / cls.capacity) * 100;
+                          return (
+                            <div key={cls.id} className="cbk" onClick={() => openClassModal(cls)}
+                              style={{ background:`${tc}12`, border:`1px solid ${tc}30`, borderLeft:`3px solid ${tc}`, borderRadius:7, padding:'9px 8px' }}>
+                              <div style={{ fontSize:11, fontWeight:600, color:CREAM, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.title}</div>
+                              <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{fmtTime(cls.start_time)}</div>
+                              {cls.trainer_name && <div style={{ fontSize:10, color:tc, marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.trainer_name}</div>}
+                              <div style={{ marginTop:5, height:3, background:'rgba(255,255,255,.06)', borderRadius:999, overflow:'hidden' }}>
+                                <div style={{ height:'100%', width:`${pct}%`, background:tc, borderRadius:999, transition:'width .3s' }} />
+                              </div>
+                              <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{cls.booked_count}/{cls.capacity} booked</div>
+                              <button
+                                onClick={e => { e.stopPropagation(); duplicateClass(cls); }}
+                                disabled={dupBusy === cls.id}
+                                style={{ marginTop:6, width:'100%', padding:'4px 0', fontSize:10, background:'rgba(248,52,51,.1)', border:'1px solid rgba(248,52,51,.25)', color:ORANGE, borderRadius:4, cursor:'pointer', opacity: dupBusy===cls.id?.5:1 }}>
+                                {dupBusy===cls.id?'…':'+ Duplicate'}
+                              </button>
                             </div>
-                            <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{cls.booked_count}/{cls.capacity} booked</div>
-                          <button
-                            onClick={e => { e.stopPropagation(); duplicateClass(cls); }}
-                            disabled={dupBusy === cls.id}
-                            style={{ marginTop:6, width:'100%', padding:'4px 0', fontSize:10, background:'rgba(225,84,43,.1)', border:'1px solid rgba(225,84,43,.25)', color:ORANGE, borderRadius:4, cursor:'pointer', opacity: dupBusy===cls.id?.5:1 }}>
-                            {dupBusy===cls.id?'…':'+ Duplicate'}
-                          </button>
-                          </div>
-                        );
-                      })}
-                      {cancelledCnt > 0 && (
-                        <div style={{ fontSize:10, color:'#3A2B1E', textAlign:'center', padding:'2px 0' }}>{cancelledCnt} cancelled</div>
-                      )}
+                          );
+                        })}
+                        {cancelledCnt > 0 && (
+                          <div style={{ fontSize:10, color:'#3A2B1E', textAlign:'center', padding:'2px 0' }}>{cancelledCnt} cancelled</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Trainer legend */}
-            {trainerNames.length > 0 && (
-              <div style={{ marginTop:20, display:'flex', gap:16, flexWrap:'wrap', padding:'12px 16px', background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, alignItems:'center' }}>
-                <span style={{ fontSize:11, color:MUTED }}>Trainers:</span>
-                {trainerNames.map(name => (
-                  <div key={name} style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <div style={{ width:9, height:9, borderRadius:'50%', background:trainerColor(name) }} />
-                    <span style={{ fontSize:12, color:CREAM }}>{name}</span>
+            {/* Sidebar */}
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+
+              {/* Today card */}
+              <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden' }}>
+                <div style={{ padding:'14px 16px', borderBottom:`1px solid ${BORDER}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <div>
+                    <div style={{ fontSize:9, color:MUTED, letterSpacing:'.12em', textTransform:'uppercase', marginBottom:3 }}>Today</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:CREAM }}>
+                      {new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short'})}
+                    </div>
                   </div>
-                ))}
+                  <button onClick={() => setTab('add-class')}
+                    style={{ fontSize:11, background:ORANGE, color:'#fff', border:'none', padding:'6px 13px', borderRadius:6, cursor:'pointer', fontWeight:600 }}>
+                    + Add
+                  </button>
+                </div>
+                <div style={{ maxHeight:340, overflowY:'auto' }}>
+                  {todayClasses.length === 0 ? (
+                    <div style={{ padding:'28px 16px', textAlign:'center', color:MUTED, fontSize:12 }}>No classes today</div>
+                  ) : (
+                    todayClasses.map((cls, i) => {
+                      const tc = trainerColor(cls.trainer_name);
+                      const pct = (cls.booked_count / cls.capacity) * 100;
+                      return (
+                        <div key={cls.id} onClick={() => openClassModal(cls)}
+                          style={{ padding:'11px 16px', cursor:'pointer', borderBottom: i < todayClasses.length-1 ? `1px solid ${BORDER}` : 'none' }}
+                          onMouseOver={e => e.currentTarget.style.background='rgba(255,255,255,.02)'}
+                          onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:4 }}>
+                            <div style={{ fontSize:12, fontWeight:600, color:CREAM, flex:1, marginRight:8 }}>{cls.title}</div>
+                            <div style={{ fontSize:11, color:ORANGE, fontWeight:600, flexShrink:0 }}>{fmtTime(cls.start_time)}</div>
+                          </div>
+                          {cls.trainer_name && <div style={{ fontSize:10, color:tc, marginBottom:4 }}>{cls.trainer_name}</div>}
+                          <div style={{ height:2, background:'rgba(255,255,255,.05)', borderRadius:999, overflow:'hidden' }}>
+                            <div style={{ height:'100%', width:`${pct}%`, background: pct >= 100 ? '#f87171' : tc, borderRadius:999 }} />
+                          </div>
+                          <div style={{ fontSize:10, color: pct >= 100 ? '#f87171' : MUTED, marginTop:3 }}>{cls.booked_count}/{cls.capacity} booked</div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            )}
-          </>
+
+              {/* Trainer legend */}
+              {trainerNames.length > 0 && (
+                <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'14px 16px' }}>
+                  <div style={{ fontSize:9, color:MUTED, letterSpacing:'.12em', textTransform:'uppercase', marginBottom:12 }}>Trainers</div>
+                  {trainerNames.map(name => (
+                    <div key={name} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:7 }}>
+                      <div style={{ width:8, height:8, borderRadius:'50%', background:trainerColor(name), flexShrink:0 }} />
+                      <span style={{ fontSize:12, color:CREAM }}>{name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Expiring soon alert */}
+              {stats && stats.expiring_soon > 0 && (
+                <div style={{ background:'rgba(251,191,36,.06)', border:'1px solid rgba(251,191,36,.2)', borderRadius:12, padding:'14px 16px' }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:'#fbbf24', marginBottom:4 }}>⚠ {stats.expiring_soon} expiring soon</div>
+                  <div style={{ fontSize:11, color:MUTED }}>Members expiring within 7 days.</div>
+                  <button onClick={() => setTab('members')}
+                    style={{ marginTop:8, fontSize:11, background:'none', border:'1px solid rgba(251,191,36,.3)', color:'#fbbf24', padding:'5px 12px', borderRadius:5, cursor:'pointer' }}>
+                    View Members →
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         )}
 
-        {/* ════════════════ MEMBERS TAB ════════════════ */}
+        {/* ════ MEMBERS TAB ════ */}
         {tab === 'members' && (
           <>
             <div style={{ display:'flex', gap:10, marginBottom:14, alignItems:'center' }}>
               <div style={{ position:'relative', flex:1 }}>
-                <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:MUTED, fontSize:13, pointerEvents:'none' }}>🔍</span>
+                <span style={{ position:'absolute', left:13, top:'50%', transform:'translateY(-50%)', color:MUTED, pointerEvents:'none', display:'flex' }}><Search size={14} strokeWidth={1.5} /></span>
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or phone..."
                   style={{ width:'100%', background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:'10px 14px 10px 36px', color:CREAM, fontSize:13 }} />
               </div>
               <button onClick={exportMembersCSV} className="abtn"
-                style={{ padding:'10px 16px', background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
-                ⬇ Export CSV
+                style={{ padding:'10px 16px', background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:6 }}>
+                <Download size={13} strokeWidth={1.5} /> Export CSV
               </button>
             </div>
 
             <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-              {/* Table header */}
               <div style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 100px', padding:'10px 16px', background:'#131009', borderBottom:`1px solid ${BORDER}` }}>
                 {['Member','Plan','Joined','Expires','Status','Actions'].map(h => (
                   <span key={h} style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600 }}>{h}</span>
                 ))}
               </div>
-
               {filteredMembers.length === 0 ? (
                 <div style={{ padding:'48px 0', textAlign:'center', color:MUTED, fontSize:13 }}>No members found.</div>
               ) : (
                 filteredMembers.map((m, i) => (
                   <div key={m.id} className="mrow" style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 100px', padding:'13px 16px', borderBottom: i < filteredMembers.length-1 ? `1px solid ${BORDER}` : 'none', alignItems:'center', background:'transparent' }}>
-                    {/* Avatar + name */}
                     <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
                       <div style={{ width:34, height:34, borderRadius:'50%', background:avatarColor(m.name), display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'#fff', flexShrink:0 }}>
                         {initials(m.name)}
@@ -442,7 +531,7 @@ export default function AdminPage() {
                     </span>
                     <div style={{ display:'flex', gap:5 }}>
                       <a href={`https://wa.me/${m.phone}`} target="_blank" rel="noopener noreferrer" className="abtn"
-                        style={{ fontSize:11, padding:'5px 8px', border:'1px solid rgba(74,222,128,.3)', color:'#4ade80', borderRadius:5, textDecoration:'none' }}>WA</a>
+                        style={{ fontSize:11, padding:'5px 8px', border:'1px solid rgba(74,222,128,.3)', color:'#4ade80', borderRadius:5, textDecoration:'none', display:'inline-flex', alignItems:'center', gap:4 }}><MessageCircle size={11} strokeWidth={1.5} />Chat</a>
                       <button onClick={() => toggleMember(m.id, m.is_active)} className="abtn"
                         style={{ fontSize:11, padding:'5px 8px', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:5, background:'none', cursor:'pointer' }}>
                         {m.is_active ? 'Off' : 'On'}
@@ -455,7 +544,7 @@ export default function AdminPage() {
           </>
         )}
 
-        {/* ════════════════ REVENUE TAB ════════════════ */}
+        {/* ════ REVENUE TAB ════ */}
         {tab === 'revenue' && (
           <>
             {revLoading ? (
@@ -464,24 +553,22 @@ export default function AdminPage() {
               <div style={{ padding:'64px 0', textAlign:'center', color:MUTED, fontSize:14 }}>No data.</div>
             ) : (
               <>
-                {/* Top KPIs */}
                 <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:12, marginBottom:24 }}>
                   {[
-                    { label:'Total Revenue', value:`₹${(revenue.total_paise/100).toLocaleString('en-IN')}`, color:ORANGE, icon:'💰' },
-                    { label:'Paid Members', value:String(revenue.total_members), color:'#4ade80', icon:'👤' },
-                    { label:'Avg per Member', value: revenue.total_members ? `₹${Math.round(revenue.total_paise/100/revenue.total_members).toLocaleString('en-IN')}` : '—', color:CREAM, icon:'📊' },
+                    { label:'Total Revenue', value:`₹${(revenue.total_paise/100).toLocaleString('en-IN')}`, color:ORANGE, Icon:TrendingUp },
+                    { label:'Paid Members', value:String(revenue.total_members), color:'#4ade80', Icon:Users },
+                    { label:'Avg per Member', value: revenue.total_members ? `₹${Math.round(revenue.total_paise/100/revenue.total_members).toLocaleString('en-IN')}` : '—', color:CREAM, Icon:BarChart3 },
                   ].map(kpi => (
-                    <div key={kpi.label} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'20px 20px' }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-                        <span style={{ fontSize:20 }}>{kpi.icon}</span>
-                        <span style={{ fontSize:28, fontWeight:700, color:kpi.color, fontFamily:'Georgia,serif' }}>{kpi.value}</span>
+                    <div key={kpi.label} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'20px 22px' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+                        <kpi.Icon size={15} color={MUTED} strokeWidth={1.5} />
+                        <span style={{ fontFamily:SERIF, fontSize:30, fontWeight:800, color:kpi.color, lineHeight:1 }}>{kpi.value}</span>
                       </div>
-                      <div style={{ fontSize:11, color:MUTED, textTransform:'uppercase', letterSpacing:'.1em' }}>{kpi.label}</div>
+                      <div style={{ fontSize:11, color:MUTED, textTransform:'uppercase', letterSpacing:'.06em' }}>{kpi.label}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Monthly bar chart */}
                 {revenue.monthly.length > 0 && (
                   <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'20px 24px', marginBottom:24 }}>
                     <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:16 }}>Monthly Revenue (Last 12 Months)</div>
@@ -493,7 +580,7 @@ export default function AdminPage() {
                             <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, height:'100%', justifyContent:'flex-end' }}>
                               <span style={{ fontSize:10, color:MUTED }}>{m.members}</span>
                               <div title={`₹${(m.revenue/100).toLocaleString('en-IN')} · ${m.members} member${m.members!==1?'s':''}`}
-                                style={{ width:'100%', background:`${ORANGE}`, borderRadius:'3px 3px 0 0', height:`${Math.max(4,(m.revenue/max)*80)}px`, opacity:.8+.2*(m.revenue/max), transition:'height .3s', cursor:'default' }} />
+                                style={{ width:'100%', background:`${ORANGE}`, borderRadius:'3px 3px 0 0', height:`${Math.max(4,(m.revenue/max)*80*revAnim)}px`, opacity:.8+.2*(m.revenue/max), transition:'height .3s', cursor:'default' }} />
                               <span style={{ fontSize:9, color:MUTED, textAlign:'center', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:'100%' }}>
                                 {m.month.replace(' ','\n')}
                               </span>

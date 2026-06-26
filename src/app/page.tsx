@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, type MembershipPlan } from '@/lib/supabase';
 import Link from 'next/link';
+import { Camera, ChevronDown } from 'lucide-react';
 
 declare global {
   interface Window {
@@ -26,7 +27,7 @@ type RazorpayOptions = {
 const SERIF = 'var(--font-bodoni), Georgia, "Times New Roman", serif';
 const DARK = '#15110D';
 const CREAM = '#F1E9DA';
-const ORANGE = '#E1542B';
+const ORANGE = '#F83433';
 const TAN = '#E5DAC6';
 const TAN2 = '#D9CDB6';
 const CARD = '#1E1812';
@@ -56,10 +57,10 @@ const CSS = `
   .anim-fadeup-3 { animation: fadeUp 0.7s 0.3s ease both }
 
   .nav-link:hover { color: ${CREAM} !important }
-  .plan-card:hover { border-color: rgba(225,84,43,0.5) !important; transform: translateY(-3px); transition: all 0.2s }
+  .plan-card:hover { border-color: rgba(248,52,51,0.5) !important; transform: translateY(-3px); transition: all 0.2s }
   .plan-card { transition: all 0.2s }
-  .btn-orange:hover { background: #C7461F !important }
-  .btn-outline:hover { background: rgba(225,84,43,0.1) !important }
+  .btn-orange:hover { background: #D8281F !important }
+  .btn-outline:hover { background: rgba(248,52,51,0.1) !important }
   .disc-card:hover .disc-num { color: ${ORANGE} !important; transition: color 0.2s }
   @keyframes waPulse {
     0%,100% { box-shadow: 0 4px 20px rgba(37,211,102,0.45) }
@@ -129,7 +130,7 @@ const DISCIPLINES = [
 
 // ─── GALLERY ─────────────────────────────────────────────────
 const GALLERY = [
-  { label: 'Aerial Silks', sub: 'Vertical Fitness', bg: 'linear-gradient(135deg,#1A1008 0%,#2A1510 100%)', accent: '#E1542B' },
+  { label: 'Aerial Silks', sub: 'Vertical Fitness', bg: 'linear-gradient(135deg,#1A1008 0%,#2A1510 100%)', accent: '#F83433' },
   { label: 'Pole Training', sub: 'Strength & Grace', bg: 'linear-gradient(135deg,#0D1018 0%,#151825 100%)', accent: '#3b82f6' },
   { label: 'Core Lab', sub: 'Pilates & TRX', bg: 'linear-gradient(135deg,#0A1510 0%,#122018 100%)', accent: '#10b981' },
   { label: 'Hip-Hop Dance', sub: 'Contemporary', bg: 'linear-gradient(135deg,#15100A 0%,#22160A 100%)', accent: '#f59e0b' },
@@ -160,7 +161,7 @@ const TESTIMONIALS = [
     role: 'Vertical Fitness · 1 year',
   },
   {
-    quote: "I’ve tried many studios in Bangalore. Nothing comes close to the depth of practice you find at AZDAH.",
+    quote: "I've tried many studios in Bangalore. Nothing comes close to the depth of practice you find at AZDAH.",
     name: 'Ananya K.',
     role: 'Holistic & Breathwork · 6 months',
   },
@@ -193,6 +194,40 @@ export default function HomePage() {
       }
     })();
   }, []);
+
+  // Reveal each section's content as it scrolls into view (self-contained; no markup needed)
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return;
+    const targets: HTMLElement[] = [];
+    document.querySelectorAll('section').forEach((sec) => {
+      if (sec.id === 'home') return; // hero already has its own entrance animation
+      const el = sec.firstElementChild as HTMLElement | null;
+      if (el) targets.push(el);
+    });
+    const vh = window.innerHeight;
+    targets.forEach((el) => {
+      if (el.getBoundingClientRect().top > vh * 0.82) {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(24px)';
+        el.style.transition = 'opacity .7s cubic-bezier(.16,1,.3,1), transform .7s cubic-bezier(.16,1,.3,1)';
+      }
+    });
+    const io = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            const t = e.target as HTMLElement;
+            t.style.opacity = '1';
+            t.style.transform = 'none';
+            io.unobserve(t);
+          }
+        });
+      },
+      { threshold: 0.12 },
+    );
+    targets.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [loadingPlans]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
@@ -391,9 +426,7 @@ export default function HomePage() {
           <div className="hero-img-col anim-fadeup-2" style={{ position: 'relative' }}>
             <div style={{ aspectRatio: '3/4', background: 'linear-gradient(160deg,#211810 0%,#1A1410 55%,#0F0C09 100%)', borderRadius: 4, border: '1px solid rgba(241,233,218,0.06)', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px 28px' }}>
               {/* Background watermark */}
-              <div style={{ position: 'absolute', right: -20, top: '50%', transform: 'translateY(-50%)', fontFamily: SERIF, fontSize: 130, fontWeight: 900, color: 'rgba(225,84,43,0.04)', letterSpacing: '.06em', lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>AZ<br/>DA<br/>H</div>
-              {/* Orange glow */}
-              <div style={{ position: 'absolute', bottom: -60, left: -40, width: 280, height: 280, background: 'radial-gradient(circle,rgba(225,84,43,0.16) 0%,transparent 70%)', pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', right: -20, top: '50%', transform: 'translateY(-50%)', fontFamily: SERIF, fontSize: 130, fontWeight: 900, color: 'rgba(248,52,51,0.04)', letterSpacing: '.06em', lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>AZ<br/>DA<br/>H</div>
 
               {/* Top label */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -410,25 +443,17 @@ export default function HomePage() {
                 </p>
               </div>
 
-              {/* Discipline tags */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'relative' }}>
-                {[
-                  { icon: '🪢', label: 'Aerial Silks & Hoop', color: '#E1542B' },
-                  { icon: '💪', label: 'Core & Strength Lab', color: '#3b82f6' },
-                  { icon: '🧘', label: 'Yoga & Breathwork', color: '#10b981' },
-                  { icon: '🕺', label: 'Dance & Hip-Hop', color: '#f59e0b' },
-                ].map(d => (
-                  <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(241,233,218,0.07)', borderLeft: `3px solid ${d.color}`, borderRadius: 2 }}>
-                    <span style={{ fontSize: 16 }}>{d.icon}</span>
-                    <span style={{ fontSize: 13, color: CREAM, fontWeight: 500 }}>{d.label}</span>
-                  </div>
-                ))}
+              {/* Discipline grid */}
+              <div style={{ borderTop: '1px solid rgba(241,233,218,0.08)', paddingTop: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
+                  {['Aerial Silks', 'Core Lab', 'Yoga Flow', 'Hip-Hop'].map(d => (
+                    <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 3, height: 3, borderRadius: '50%', background: ORANGE, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, color: MUTED, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{d}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            {/* Floating badge */}
-            <div style={{ position: 'absolute', bottom: -20, left: -24, background: ORANGE, padding: '16px 20px', borderRadius: 2 }}>
-              <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 800, color: DARK, lineHeight: 1 }}>₹1,500</div>
-              <div style={{ fontSize: 10, color: 'rgba(21,17,13,0.7)', letterSpacing: '0.1em', textTransform: 'uppercase', marginTop: 3 }}>/ month onwards</div>
             </div>
           </div>
         </div>
@@ -490,15 +515,18 @@ export default function HomePage() {
               Every class is designed to meet you where you are, challenge who you are becoming, and celebrate the strength you already carry.
             </p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <div>
             {[
-              ['Intentional', 'Every session is designed with purpose — no filler, no fluff.'],
-              ['Inclusive', 'Beginners and veterans share the same floor. Your pace, your power.'],
-              ['Transformative', 'We measure progress in confidence, not just calories burned.'],
-            ].map(([title, text]) => (
-              <div key={title} style={{ padding: '24px 28px', background: CARD, borderLeft: `3px solid ${ORANGE}` }}>
-                <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 16, color: CREAM, marginBottom: 8 }}>{title}</div>
-                <div style={{ color: MUTED, fontSize: 13.5, lineHeight: 1.6 }}>{text}</div>
+              ['01', 'Intentional', 'Every session is designed with purpose — no filler, no fluff.'],
+              ['02', 'Inclusive', 'Beginners and veterans share the same floor. Your pace, your power.'],
+              ['03', 'Transformative', 'We measure progress in confidence, not just calories burned.'],
+            ].map(([num, title, text]) => (
+              <div key={title} style={{ display: 'flex', gap: 32, padding: '28px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
+                <span style={{ fontSize: 11, color: ORANGE, letterSpacing: '.08em', minWidth: 20, flexShrink: 0, paddingTop: 2 }}>{num}</span>
+                <div>
+                  <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 16, color: CREAM, marginBottom: 8 }}>{title}</div>
+                  <div style={{ color: MUTED, fontSize: 13.5, lineHeight: 1.65 }}>{text}</div>
+                </div>
               </div>
             ))}
           </div>
@@ -537,17 +565,15 @@ export default function HomePage() {
               A space designed for movement — equipped with professional-grade aerial rigs, sprung floors, and natural light.
             </p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gridTemplateRows: 'auto auto', gap: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gridTemplateRows: 'auto auto', gap: 4 }}>
             {GALLERY.map((g, i) => (
-              <div key={g.label} style={{ background: g.bg, border: `1px solid ${g.accent}18`, borderRadius: 2, padding: '40px 28px', position: 'relative', overflow: 'hidden', gridColumn: i === 3 ? 'span 2' : 'span 1', minHeight: i === 3 ? 180 : 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                <div style={{ position: 'absolute', top: 16, right: 16, width: 8, height: 8, borderRadius: '50%', background: g.accent, opacity: .7 }} />
-                <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: `radial-gradient(circle,${g.accent}18 0%,transparent 70%)`, pointerEvents: 'none' }} />
-                <div style={{ fontSize: 11, color: g.accent, letterSpacing: '.18em', textTransform: 'uppercase', marginBottom: 6, fontWeight: 600 }}>{g.sub}</div>
-                <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: CREAM }}>{g.label}</div>
+              <div key={g.label} style={{ background: g.bg, border: `1px solid ${g.accent}12`, borderRadius: 2, padding: '40px 28px', position: 'relative', overflow: 'hidden', gridColumn: i === 3 ? 'span 2' : 'span 1', minHeight: i === 3 ? 180 : 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+                <div style={{ fontSize: 10, color: g.accent, letterSpacing: '.18em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600, opacity: 0.8 }}>{g.sub}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 700, color: CREAM }}>{g.label}</div>
               </div>
             ))}
           </div>
-          <p style={{ color: FAINT, fontSize: 12, textAlign: 'center', marginTop: 20 }}>📸 Studio photography coming soon</p>
+          <p style={{ color: FAINT, fontSize: 12, textAlign: 'center', marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Camera size={12} strokeWidth={1.5} /> Studio photography coming soon</p>
         </div>
       </section>
 
@@ -613,7 +639,7 @@ export default function HomePage() {
                     <button onClick={() => openCheckout(plan)} className={isPopular ? 'btn-orange' : 'btn-outline'} style={{
                       width: '100%', padding: '13px 0', borderRadius: 2,
                       background: isPopular ? ORANGE : 'none',
-                      border: isPopular ? 'none' : `1px solid rgba(225,84,43,0.5)`,
+                      border: isPopular ? 'none' : `1px solid rgba(248,52,51,0.5)`,
                       color: isPopular ? DARK : ORANGE,
                       fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase',
                     }}>
@@ -639,11 +665,11 @@ export default function HomePage() {
             {FAQS.map((faq, i) => {
               const isOpen = openFaq === i;
               return (
-                <div key={i} style={{ background: isOpen ? CARD : 'transparent', border: `1px solid ${isOpen ? 'rgba(225,84,43,0.25)' : 'rgba(241,233,218,0.08)'}`, borderRadius: 2, overflow: 'hidden', transition: 'border-color .2s,background .2s' }}>
+                <div key={i} style={{ background: isOpen ? CARD : 'transparent', border: `1px solid ${isOpen ? 'rgba(248,52,51,0.25)' : 'rgba(241,233,218,0.08)'}`, borderRadius: 2, overflow: 'hidden', transition: 'border-color .2s,background .2s' }}>
                   <button onClick={() => setOpenFaq(isOpen ? null : i)}
                     style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, textAlign: 'left' }}>
                     <span style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 600, color: isOpen ? CREAM : TAN, lineHeight: 1.4 }}>{faq.q}</span>
-                    <span style={{ color: ORANGE, fontSize: 20, flexShrink: 0, lineHeight: 1, transform: isOpen ? 'rotate(45deg)' : 'none', transition: 'transform .2s', display: 'inline-block' }}>+</span>
+                    <ChevronDown size={17} color={ORANGE} strokeWidth={1.5} style={{ flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform .25s ease' }} />
                   </button>
                   {isOpen && (
                     <div style={{ padding: '0 24px 22px', color: MUTED, fontSize: 14.5, lineHeight: 1.75 }}>{faq.a}</div>
@@ -779,7 +805,7 @@ export default function HomePage() {
             {checkoutDone ? (
               /* Success screen */
               <div style={{ padding: '48px 32px', textAlign: 'center' }}>
-                <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(225,84,43,0.12)', border: `1px solid ${ORANGE}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                <div style={{ width: 60, height: 60, borderRadius: '50%', background: 'rgba(248,52,51,0.12)', border: `1px solid ${ORANGE}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
                     <path d="M5 13l4 4L19 7" stroke={ORANGE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
@@ -845,7 +871,7 @@ export default function HomePage() {
                 </div>
 
                 {checkoutError && (
-                  <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(225,84,43,0.1)', border: '1px solid rgba(225,84,43,0.3)', borderRadius: 2, color: '#FF8060', fontSize: 13 }}>
+                  <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(248,52,51,0.1)', border: '1px solid rgba(248,52,51,0.3)', borderRadius: 2, color: '#FF8060', fontSize: 13 }}>
                     {checkoutError}
                   </div>
                 )}
