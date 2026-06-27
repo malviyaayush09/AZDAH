@@ -183,8 +183,6 @@ export default function HomePage() {
   const [checkoutDone, setCheckoutDone] = useState(false);
   const [memberCreds, setMemberCreds] = useState<{ phone: string; name: string; password: string } | null>(null);
   const [receipt, setReceipt] = useState<{ planName: string; amount: number; planEnd: string } | null>(null);
-  type PublicClass = { id: string; title: string; trainer_name: string | null; class_date: string; start_time: string; end_time: string; capacity: number; booked_count: number };
-  const [publicClasses, setPublicClasses] = useState<PublicClass[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -198,7 +196,6 @@ export default function HomePage() {
         setLoadingPlans(false);
       }
     })();
-    fetch('/api/classes/public').then(r => r.json()).then(d => setPublicClasses(d.classes || [])).catch(() => {});
   }, []);
 
   // Reveal each section's content as it scrolls into view (self-contained; no markup needed)
@@ -367,7 +364,7 @@ export default function HomePage() {
 
           {/* Desktop links */}
           <nav className="nav-links" style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
-            {(['Home', 'About', 'Schedule', 'Membership', 'Contact'] as const).map((label) => (
+            {(['Home', 'About', 'Membership', 'Contact'] as const).map((label) => (
               <button key={label} onClick={() => scrollTo(label.toLowerCase())} className="nav-link"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: MUTED, fontSize: 13.5, letterSpacing: '0.025em', fontWeight: 500 }}>
                 {label}
@@ -599,52 +596,6 @@ export default function HomePage() {
           <p style={{ color: FAINT, fontSize: 12, textAlign: 'center', marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Camera size={12} strokeWidth={1.5} /> Studio photography coming soon</p>
         </div>
       </section>
-
-      {/* ── CLASS SCHEDULE ── */}
-      {publicClasses.length > 0 && (
-        <section id="schedule" style={{ background: FOOT, padding: '80px 28px', borderTop: '1px solid rgba(241,233,218,0.07)' }}>
-          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <div style={{ marginBottom: 40, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 16 }}>
-              <div>
-                <div style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 10 }}>Upcoming Classes</div>
-                <h2 style={{ fontFamily: SERIF, fontSize: 36, fontWeight: 800, color: CREAM, margin: 0, lineHeight: 1.1 }}>What&apos;s On This Week</h2>
-              </div>
-              <button onClick={() => scrollTo('membership')} style={{ background: 'none', border: '1px solid rgba(248,52,51,0.4)', color: ORANGE, fontSize: 13, fontWeight: 600, padding: '10px 20px', borderRadius: 2, cursor: 'pointer' }}>
-                Join to Book →
-              </button>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-              {publicClasses.slice(0, 9).map(cls => {
-                const [h] = cls.start_time.split(':').map(Number);
-                const ampm = h >= 12 ? 'PM' : 'AM';
-                const h12 = h % 12 || 12;
-                const spotsLeft = cls.capacity - cls.booked_count;
-                const isFull = spotsLeft <= 0;
-                const d = new Date(cls.class_date + 'T00:00:00');
-                const today = new Date(); today.setHours(0,0,0,0);
-                const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1);
-                const dayLabel = d.getTime() === today.getTime() ? 'Today' : d.getTime() === tomorrow.getTime() ? 'Tomorrow' : d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-                return (
-                  <div key={cls.id} style={{ background: CARD, border: '1px solid rgba(241,233,218,0.08)', borderRadius: 8, padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-                    <div style={{ textAlign: 'center', flexShrink: 0, minWidth: 36 }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: ORANGE, lineHeight: 1 }}>{h12}</div>
-                      <div style={{ fontSize: 10, color: MUTED }}>{ampm}</div>
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: CREAM, marginBottom: 3 }}>{cls.title}</div>
-                      <div style={{ fontSize: 12, color: MUTED, marginBottom: 6 }}>{dayLabel}{cls.trainer_name ? ` · ${cls.trainer_name}` : ''}</div>
-                      <span style={{ fontSize: 11, padding: '3px 9px', borderRadius: 999, background: isFull ? 'rgba(248,113,113,0.1)' : spotsLeft <= 3 ? 'rgba(251,191,36,0.1)' : 'rgba(74,222,128,0.08)', color: isFull ? '#f87171' : spotsLeft <= 3 ? '#fbbf24' : '#4ade80', border: `1px solid ${isFull ? 'rgba(248,113,113,0.25)' : spotsLeft <= 3 ? 'rgba(251,191,36,0.25)' : 'rgba(74,222,128,0.2)'}` }}>
-                        {isFull ? 'Full' : `${spotsLeft} spot${spotsLeft !== 1 ? 's' : ''} left`}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <p style={{ textAlign: 'center', color: MUTED, fontSize: 13, marginTop: 28 }}>Members can book any class from their dashboard · <button onClick={() => scrollTo('membership')} style={{ background: 'none', border: 'none', color: ORANGE, cursor: 'pointer', fontSize: 13, textDecoration: 'underline' }}>Join now</button></p>
-          </div>
-        </section>
-      )}
 
       {/* ── PRICING ── */}
       <section id="membership" style={{ background: DARK, padding: '100px 28px' }}>
