@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, CalendarDays, Info, Eye, EyeOff } from 'lucide-react';
+import { Settings, CalendarDays, Info, Eye, EyeOff, User } from 'lucide-react';
 
 type MemberInfo = {
   id: string; name: string; phone: string;
@@ -22,7 +22,8 @@ type HistoryItem = {
   id: string; title: string; trainer_name: string | null;
   class_date: string; start_time: string; end_time: string;
 };
-type Tab = 'book' | 'my-bookings' | 'history';
+type Tab = 'book' | 'my-bookings' | 'history' | 'profile';
+type WaitlistPos = { classId: string; position: number; total: number };
 type MemberStats = {
   total_attended: number; this_month: number; this_week: number;
   streak_weeks: number; attendance_rate: number;
@@ -72,6 +73,12 @@ export default function DashboardPage() {
   const [pwBusy, setPwBusy]   = useState(false);
   const [showCurrent, setShowCurrent] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  // Profile
+  const [profileForm, setProfileForm] = useState({ name: '', email: '' });
+  const [profileMsg, setProfileMsg] = useState<{text:string;ok:boolean}|null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  // Waitlist positions cache
+  const [waitlistPos, setWaitlistPos] = useState<WaitlistPos[]>([]);
 
   const todayStr = toYMD(new Date());
   const days14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; });
@@ -104,8 +111,20 @@ export default function DashboardPage() {
     setMyBookings(cData.myBookings || []);
     if (sData.total_attended !== undefined) setStats(sData);
     setLoading(false);
-    // Force password change on first login
     if (mData.member?.must_change_password) setShowPwModal(true);
+    if (mData.member) setProfileForm({ name: mData.member.name, email: '' });
+    // Fetch waitlist positions for on-waitlist classes
+    const wlClasses = (cData.upcoming || []).filter((c: ClassSlot) => c.on_waitlist);
+    if (wlClasses.length > 0) {
+      const positions = await Promise.all(
+        wlClasses.map((c: ClassSlot) =>
+          fetch(`/api/member/waitlist-position?classId=${c.id}`)
+            .then(r => r.json())
+            .then(d => d.position ? { classId: c.id, position: d.position, total: d.total } : null)
+        )
+      );
+      setWaitlistPos(positions.filter(Boolean) as WaitlistPos[]);
+    }
   }
 
   async function loadHistory() {
@@ -180,6 +199,17 @@ export default function DashboardPage() {
   }
 
   async function logout() { await fetch('/api/auth/logout',{method:'POST'}); router.push('/login'); }
+
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault(); setProfileMsg(null); setProfileBusy(true);
+    const res = await fetch('/api/member/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profileForm)});
+    const data = await res.json();
+    setProfileBusy(false);
+    if (data.success) {
+      setProfileMsg({text:'Profile updated!',ok:true});
+      setMember(prev => prev ? {...prev, name: profileForm.name || prev.name} : prev);
+    } else setProfileMsg({text:data.error||'Update failed',ok:false});
+  }
 
   const trainers = ['all',...Array.from(new Set(classes.map(c=>c.trainer_name).filter(Boolean) as string[]))];
   const dayClasses = classes
@@ -364,6 +394,33 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* ── THIS WEEK ── */}
+        {(()=>{
+          const weekStart=new Date(); weekStart.setHours(0,0,0,0); weekStart.setDate(weekStart.getDate()-(weekStart.getDay()===0?6:weekStart.getDay()-1));
+          const weekEnd=new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
+          const weekBookings=myBookings.filter(b=>{const d=new Date(b.class_date+'T00:00:00');return d>=weekStart&&d<=weekEnd;}).sort((a,b)=>(a.class_date+a.start_time).localeCompare(b.class_date+b.start_time));
+          if(!weekBookings.length) return null;
+          return(
+            <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,padding:'18px 20px',marginBottom:14}}>
+              <div style={{fontSize:11,color:MUTED,letterSpacing:'.1em',textTransform:'uppercase',marginBottom:12}}>This Week</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {weekBookings.map(b=>(
+                  <div key={b.my_booking_id} style={{display:'flex',alignItems:'center',gap:12}}>
+                    <div style={{width:36,height:36,borderRadius:8,background:'rgba(248,52,51,.1)',border:'1px solid rgba(248,52,51,.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                      <CalendarDays size={15} color={ORANGE} strokeWidth={1.5} />
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:CREAM,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{b.title}</div>
+                      <div style={{fontSize:11,color:MUTED}}>{dateLabel(b.class_date,todayStr)} · {fmtTime(b.start_time)}</div>
+                    </div>
+                    <span style={{fontSize:10,padding:'3px 10px',background:'rgba(74,222,128,.08)',color:'#4ade80',border:'1px solid rgba(74,222,128,.2)',borderRadius:999,flexShrink:0}}>Booked</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── BOOKING SECTION ── */}
         <div style={{background:CARD,border:`1px solid ${BORDER}`,borderRadius:12,overflow:'hidden'}}>
 
@@ -377,7 +434,7 @@ export default function DashboardPage() {
 
           {/* Tabs */}
           <div style={{display:'flex',borderBottom:`1px solid ${BORDER}`,padding:'0 20px'}}>
-            {([['book','Book a Class'],['my-bookings',`My Bookings${myBookings.length>0?' ('+myBookings.length+')':''}`],['history','History']] as const).map(([k,l])=>(
+            {([['book','Book a Class'],['my-bookings',`My Bookings${myBookings.length>0?' ('+myBookings.length+')':''}`],['history','History'],['profile','Profile']] as const).map(([k,l])=>(
               <button key={k} className="tab-btn" onClick={()=>{setTab(k);setMsg(null);if(k==='history')loadHistory();}}
                 style={{padding:'14px 16px',fontSize:13,fontWeight:500,color:tab===k?ORANGE:MUTED,
                   background:'none',border:'none',borderBottom:tab===k?`2px solid ${ORANGE}`:'2px solid transparent',
@@ -463,7 +520,7 @@ export default function DashboardPage() {
                               <span style={{fontSize:15,fontWeight:600,color:CREAM}}>{cls.title}</span>
                               {isBooked&&<span style={{fontSize:10,background:'rgba(74,222,128,.12)',color:'#4ade80',border:'1px solid rgba(74,222,128,.28)',padding:'2px 8px',borderRadius:999}}>Booked ✓</span>}
                               {isFull&&!cls.on_waitlist&&<span style={{fontSize:10,background:'rgba(248,113,113,.12)',color:'#f87171',border:'1px solid rgba(248,113,113,.28)',padding:'2px 8px',borderRadius:999}}>Full</span>}
-                              {cls.on_waitlist&&<span style={{fontSize:10,background:'rgba(251,191,36,.12)',color:'#fbbf24',border:'1px solid rgba(251,191,36,.28)',padding:'2px 8px',borderRadius:999}}>On Waitlist</span>}
+                              {cls.on_waitlist&&(()=>{const wp=waitlistPos.find(w=>w.classId===cls.id);return(<span style={{fontSize:10,background:'rgba(251,191,36,.12)',color:'#fbbf24',border:'1px solid rgba(251,191,36,.28)',padding:'2px 8px',borderRadius:999}}>{wp?`Waitlist #${wp.position} of ${wp.total}`:'On Waitlist'}</span>);})()}
                             </div>
                             <div style={{fontSize:12,color:MUTED}}>{fmtTime(cls.start_time)} – {fmtTime(cls.end_time)}{cls.trainer_name&&<span style={{color:ORANGE,marginLeft:6}}>· {cls.trainer_name}</span>}</div>
                             <div style={{marginTop:8,display:'flex',alignItems:'center',gap:8}}>
@@ -502,6 +559,9 @@ export default function DashboardPage() {
             {/* ════ MY BOOKINGS ════ */}
             {tab==='my-bookings'&&(
               <>
+                <div style={{marginBottom:14,padding:'9px 14px',background:'rgba(255,255,255,.03)',border:`1px solid ${BORDER}`,borderRadius:8,fontSize:12,color:MUTED,display:'flex',alignItems:'center',gap:8}}>
+                  <Info size={13} strokeWidth={1.5} style={{flexShrink:0}} /> Cancellations are allowed up to 2 hours before class starts.
+                </div>
                 {!member!.reschedule_used&&!rescheduleMode&&myBookings.length>0&&(
                   <div style={{marginBottom:16,padding:'10px 14px',background:'rgba(37,99,235,.08)',border:'1px solid rgba(37,99,235,.25)',borderRadius:8,fontSize:12,color:'#93c5fd'}}>
                     <Info size={13} strokeWidth={1.5} style={{flexShrink:0,marginRight:6}} /> You have 1 free reschedule available this month.
@@ -592,6 +652,58 @@ export default function DashboardPage() {
                   </>
                 )}
               </>
+            )}
+
+            {/* ════ PROFILE ════ */}
+            {tab==='profile'&&(
+              <div style={{maxWidth:420}}>
+                <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:24}}>
+                  <div style={{width:56,height:56,borderRadius:'50%',background:ORANGE,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:700,color:'#fff'}}>
+                    {member!.name.split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2)}
+                  </div>
+                  <div>
+                    <div style={{fontSize:16,fontWeight:700,color:CREAM}}>{member!.name}</div>
+                    <div style={{fontSize:12,color:MUTED}}>{member!.phone}</div>
+                  </div>
+                </div>
+                <form onSubmit={saveProfile} style={{display:'flex',flexDirection:'column',gap:14}}>
+                  {[['Full Name','name','text',profileForm.name],['Email (optional)','email','email',profileForm.email]] .map(([label,key,type,val])=>(
+                    <div key={key}>
+                      <label style={{display:'block',fontSize:11,color:MUTED,marginBottom:6,textTransform:'uppercase',letterSpacing:'.1em'}}>{label}</label>
+                      <div style={{border:`1px solid ${BORDER}`,borderRadius:8,background:DARK,padding:'0 12px'}}>
+                        <input type={type} value={val} onChange={e=>setProfileForm(p=>({...p,[key]:e.target.value}))} style={{padding:'11px 0'}} placeholder={key==='email'?'your@email.com':''} />
+                      </div>
+                    </div>
+                  ))}
+                  {profileMsg&&(
+                    <div style={{padding:'10px 12px',background:profileMsg.ok?'rgba(74,222,128,.08)':'rgba(248,113,113,.08)',border:`1px solid ${profileMsg.ok?'rgba(74,222,128,.25)':'rgba(248,113,113,.25)'}`,borderRadius:7,fontSize:12,color:profileMsg.ok?'#4ade80':'#f87171'}}>
+                      {profileMsg.text}
+                    </div>
+                  )}
+                  <div style={{display:'flex',gap:10}}>
+                    <button type="submit" disabled={profileBusy}
+                      style={{flex:1,padding:'12px',background:profileBusy?MUTED:ORANGE,color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:600,cursor:profileBusy?'not-allowed':'pointer'}}>
+                      {profileBusy?'Saving…':'Save Changes'}
+                    </button>
+                    <button type="button" onClick={()=>{setShowPwModal(true);setPwMsg(null);setPwForm({current:'',newPw:'',confirm:''});}}
+                      style={{padding:'12px 18px',background:'none',border:`1px solid ${BORDER}`,color:MUTED,borderRadius:8,fontSize:13,cursor:'pointer'}}>
+                      Change Password
+                    </button>
+                  </div>
+                </form>
+                <div style={{marginTop:24,padding:'14px 16px',background:'rgba(255,255,255,.03)',border:`1px solid ${BORDER}`,borderRadius:10}}>
+                  <div style={{fontSize:11,color:MUTED,letterSpacing:'.08em',textTransform:'uppercase',marginBottom:10}}>Membership</div>
+                  <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Plan</span><span style={{color:CREAM,fontWeight:600}}>{member!.plan_name}</span></div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Valid until</span><span style={{color:member!.days_remaining<=7?'#f87171':CREAM,fontWeight:600}}>{fmtShortDate(member!.plan_end)}</span></div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Days remaining</span><span style={{color:member!.days_remaining<=7?'#f87171':'#4ade80',fontWeight:600}}>{member!.days_remaining} days</span></div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Status</span><span style={{color:member!.is_frozen?'#fbbf24':'#4ade80',fontWeight:600}}>{member!.is_frozen?'Frozen':'Active'}</span></div>
+                  </div>
+                </div>
+                <button onClick={logout} style={{marginTop:16,width:'100%',padding:'11px',background:'none',border:'1px solid rgba(248,113,113,.25)',color:'#f87171',borderRadius:8,fontSize:13,cursor:'pointer'}}>
+                  Log out
+                </button>
+              </div>
             )}
 
           </div>

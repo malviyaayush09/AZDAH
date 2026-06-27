@@ -123,6 +123,12 @@ export default function AdminPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [revView, setRevView] = useState<'monthly' | 'yearly'>('monthly');
+  type OverviewStats = {
+    today: { classes: number; expected_members: number; attended: number };
+    expiring_this_week: { id: string; name: string; phone: string; plan_name: string; plan_end: string; days_remaining: number }[];
+    inactive_members: { id: string; name: string; phone: string; plan_name: string; plan_end: string; created_at: string }[];
+  };
+  const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -153,12 +159,13 @@ export default function AdminPage() {
   }, [revenue]);
 
   async function fetchAll() {
-    const [mRes, cRes] = await Promise.all([fetch('/api/admin/members'), fetch('/api/admin/classes')]);
+    const [mRes, cRes, ovRes] = await Promise.all([fetch('/api/admin/members'), fetch('/api/admin/classes'), fetch('/api/admin/overview-stats')]);
     if (mRes.status === 401 || mRes.status === 403) { router.push('/login'); return; }
-    const [mData, cData] = await Promise.all([mRes.json(), cRes.json()]);
+    const [mData, cData, ovData] = await Promise.all([mRes.json(), cRes.json(), ovRes.json()]);
     setMembers(mData.members || []);
     setStats(mData.stats || null);
     setClasses(cData.classes || []);
+    setOverviewStats(ovData.today ? ovData : null);
     setLoading(false);
   }
 
@@ -458,6 +465,85 @@ export default function AdminPage() {
                 <div style={{ fontSize:10, color:MUTED, letterSpacing:'.06em', textTransform:'uppercase' }}>{s.label}</div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── TODAY / EXPIRING / INACTIVE ── */}
+        {overviewStats && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:14, marginBottom:16 }}>
+
+            {/* Today's attendance */}
+            <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'18px 20px' }}>
+              <div style={{ fontSize:11, color:MUTED, letterSpacing:'.1em', textTransform:'uppercase', marginBottom:12 }}>Today</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
+                  <span style={{ color:MUTED }}>Classes scheduled</span>
+                  <span style={{ color:CREAM, fontWeight:700 }}>{overviewStats.today.classes}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
+                  <span style={{ color:MUTED }}>Members expected</span>
+                  <span style={{ color:CREAM, fontWeight:700 }}>{overviewStats.today.expected_members}</span>
+                </div>
+                <div style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
+                  <span style={{ color:MUTED }}>Attended so far</span>
+                  <span style={{ color:'#4ade80', fontWeight:700 }}>{overviewStats.today.attended}</span>
+                </div>
+              </div>
+              {overviewStats.today.classes === 0 && <div style={{ fontSize:12, color:MUTED, marginTop:8 }}>No classes scheduled today.</div>}
+            </div>
+
+            {/* Expiring this week */}
+            <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'18px 20px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                <div style={{ fontSize:11, color:MUTED, letterSpacing:'.1em', textTransform:'uppercase' }}>Expiring This Week</div>
+                <span style={{ fontSize:12, fontWeight:700, color: overviewStats.expiring_this_week.length > 0 ? '#fbbf24' : MUTED }}>{overviewStats.expiring_this_week.length}</span>
+              </div>
+              {overviewStats.expiring_this_week.length === 0 ? (
+                <div style={{ fontSize:12, color:MUTED }}>No memberships expiring in the next 7 days.</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:140, overflowY:'auto' }}>
+                  {overviewStats.expiring_this_week.map(m => (
+                    <div key={m.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, color:CREAM, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.name}</div>
+                        <div style={{ fontSize:11, color:MUTED }}>{m.days_remaining}d left · {m.plan_name}</div>
+                      </div>
+                      <a href={`https://wa.me/${m.phone}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize:11, padding:'4px 10px', background:'rgba(37,211,102,.1)', color:'#25d366', border:'1px solid rgba(37,211,102,.25)', borderRadius:6, textDecoration:'none', flexShrink:0 }}>
+                        WA
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Inactive members */}
+            <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'18px 20px' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                <div style={{ fontSize:11, color:MUTED, letterSpacing:'.1em', textTransform:'uppercase' }}>Inactive Members</div>
+                <span style={{ fontSize:12, fontWeight:700, color: overviewStats.inactive_members.length > 0 ? '#f87171' : MUTED }}>{overviewStats.inactive_members.length}</span>
+              </div>
+              {overviewStats.inactive_members.length === 0 ? (
+                <div style={{ fontSize:12, color:MUTED }}>No inactive members.</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8, maxHeight:140, overflowY:'auto' }}>
+                  {overviewStats.inactive_members.slice(0, 8).map(m => (
+                    <div key={m.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:8 }}>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, color:CREAM, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.name}</div>
+                        <div style={{ fontSize:11, color:MUTED }}>{m.plan_name}</div>
+                      </div>
+                      <a href={`https://wa.me/${m.phone}`} target="_blank" rel="noreferrer"
+                        style={{ fontSize:11, padding:'4px 10px', background:'rgba(248,52,51,.1)', color:ORANGE, border:`1px solid rgba(248,52,51,.25)`, borderRadius:6, textDecoration:'none', flexShrink:0 }}>
+                        WA
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
           </div>
         )}
 
