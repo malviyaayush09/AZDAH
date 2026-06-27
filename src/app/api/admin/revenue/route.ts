@@ -52,6 +52,21 @@ export async function GET(req: NextRequest) {
     .map(([, v]) => v)
     .slice(-12); // Last 12 months
 
+  // Yearly breakdown
+  const yearlyMap = new Map<string, { year: string; revenue: number; members: number }>();
+  for (const m of members) {
+    const plans = m.membership_plans;
+    const price = (Array.isArray(plans) ? plans[0] : plans as { price_paise: number } | null)?.price_paise || 0;
+    const year = new Date(m.created_at).getFullYear().toString();
+    if (!yearlyMap.has(year)) yearlyMap.set(year, { year, revenue: 0, members: 0 });
+    const entry = yearlyMap.get(year)!;
+    entry.revenue += price;
+    entry.members += 1;
+  }
+  const yearly = Array.from(yearlyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, v]) => v);
+
   // Recent 10 payments
   const recent = members.slice(-10).reverse().map(m => {
     const plans = m.membership_plans;
@@ -66,6 +81,7 @@ export async function GET(req: NextRequest) {
     total_paise: totalPaise,
     total_members: members.length,
     monthly,
+    yearly,
     recent,
   });
 }

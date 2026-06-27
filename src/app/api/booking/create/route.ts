@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
 import { sendBookingConfirmed } from '@/lib/whatsapp';
+import { checkRateLimit, recordRequest } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
   // Auth
@@ -14,8 +15,18 @@ export async function POST(req: NextRequest) {
   }
   const { memberId } = session as { memberId: string };
 
+  // Rate limit: max 10 bookings per member per hour
+  const rlKey = `booking:${memberId}`;
+  if (await checkRateLimit(rlKey, 10, 60)) {
+    return NextResponse.json({ error: 'Too many booking attempts. Try again later.' }, { status: 429 });
+  }
+  await recordRequest(rlKey);
+
   const { classId } = await req.json();
   if (!classId) return NextResponse.json({ error: 'classId required' }, { status: 400 });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(classId)) {
+    return NextResponse.json({ error: 'Invalid classId' }, { status: 400 });
+  }
 
   const db = getServiceClient();
 
@@ -40,32 +51,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
   }
 
-  // Check capacity
-  const { data: countData } = await db.rpc('class_booking_count', { class_uuid: classId });
-  if ((countData || 0) >= cls.capacity) {
-    return NextResponse.json({ error: 'Class is full' }, { status: 400 });
-  }
+  // Atomic capacity check + insert — prevents race conditions
+  const { data: result, error: bookingError } = await db.rpc('book_class_atomic', {
+    p_member_id: memberId,
+    p_class_id: classId,
+  });
 
-  // Check not already booked
-  const { data: existing } = await db
-    .from('bookings')
-    .select('id, status')
-    .eq('member_id', memberId)
-    .eq('class_id', classId)
-    .single();
-
-  if (existing) {
-    if (existing.status === 'confirmed') {
-      return NextResponse.json({ error: 'Already booked for this class' }, { status: 400 });
-    }
-    // Re-activate a previously cancelled/waitlisted booking; reset attended so admin marks fresh
-    const { error } = await db.from('bookings').update({ status: 'confirmed', attended: null }).eq('id', existing.id);
-    if (error) return NextResponse.json({ error: error.message || 'Booking failed' }, { status: 500 });
-  } else {
-    // Create new booking
-    const { error } = await db.from('bookings').insert({ member_id: memberId, class_id: classId, status: 'confirmed' });
-    if (error) return NextResponse.json({ error: error.message || 'Booking failed' }, { status: 500 });
-  }
+  if (bookingError) return NextResponse.json({ error: 'Booking failed' }, { status: 500 });
+  if (result === 'class_not_found') return NextResponse.json({ error: 'Class not found' }, { status: 404 });
+  if (result === 'class_full') return NextResponse.json({ error: 'Class is full' }, { status: 400 });
+  if (result === 'already_booked') return NextResponse.json({ error: 'Already booked for this class' }, { status: 400 });
 
   // WhatsApp confirmation
   const dateStr = new Date(cls.class_date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });

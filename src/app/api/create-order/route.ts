@@ -3,13 +3,32 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { createOrder } from '@/lib/razorpay';
+import { checkRateLimit, recordRequest } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
-  const { planId, phone, name, email } = await req.json();
+  const { planId, phone, name, email, promoCode } = await req.json();
 
   if (!planId || !phone || !name) {
     return NextResponse.json({ error: 'planId, phone, and name required' }, { status: 400 });
   }
+
+  // Phone format validation
+  const cleanPhone = String(phone).trim().replace(/\D/g, '');
+  if (!/^\d{10,15}$/.test(cleanPhone)) {
+    return NextResponse.json({ error: 'Invalid phone number' }, { status: 400 });
+  }
+
+  // planId must be a UUID
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(planId)) {
+    return NextResponse.json({ error: 'Invalid planId' }, { status: 400 });
+  }
+
+  // Rate limit: max 5 payment attempts per phone per hour
+  const rlKey = `payment:${cleanPhone}`;
+  if (await checkRateLimit(rlKey, 5, 60)) {
+    return NextResponse.json({ error: 'Too many payment attempts. Try again later.' }, { status: 429 });
+  }
+  await recordRequest(rlKey);
 
   const db = getServiceClient();
 
@@ -48,15 +67,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Plan not found' }, { status: 404 });
   }
 
+  // Validate promo code if provided
+  let discountPercent = 0;
+  let validatedPromo: string | null = null;
+  if (promoCode) {
+    const { data: promo } = await db
+      .from('promo_codes')
+      .select('id, discount_percent, max_uses, uses_count, expires_at, is_active')
+      .eq('code', String(promoCode).toUpperCase().trim())
+      .single();
+
+    if (promo && promo.is_active &&
+        (!promo.expires_at || new Date(promo.expires_at) > new Date()) &&
+        (promo.max_uses === null || promo.uses_count < promo.max_uses)) {
+      discountPercent = promo.discount_percent;
+      validatedPromo = String(promoCode).toUpperCase().trim();
+    }
+  }
+
+  const finalAmount = discountPercent > 0
+    ? Math.round(plan.price_paise * (1 - discountPercent / 100))
+    : plan.price_paise;
+
   // Create Razorpay order
   const receipt = `azdah_${phone}_${Date.now().toString(36)}`;
   let order: { id: string; amount: number; currency: string };
   try {
-    order = await createOrder(plan.price_paise, receipt);
+    order = await createOrder(finalAmount, receipt);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Razorpay order creation failed';
     console.error('Razorpay createOrder error:', msg);
     return NextResponse.json({ error: msg }, { status: 502 });
+  }
+
+  // Increment promo uses
+  if (validatedPromo) {
+    const { data: p } = await db.from('promo_codes').select('uses_count').eq('code', validatedPromo).single();
+    if (p) await db.from('promo_codes').update({ uses_count: p.uses_count + 1 }).eq('code', validatedPromo);
   }
 
   // Store pending intent in DB
@@ -69,5 +116,10 @@ export async function POST(req: NextRequest) {
     status: 'pending',
   });
 
-  return NextResponse.json({ orderId: order.id, amount: plan.price_paise });
+  return NextResponse.json({
+    orderId: order.id,
+    amount: finalAmount,
+    original_amount: plan.price_paise,
+    discount_percent: discountPercent,
+  });
 }

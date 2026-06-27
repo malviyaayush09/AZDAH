@@ -23,7 +23,7 @@ async function sendTemplate(
         type: 'template',
         template: {
           name: templateName,
-          language: { code: 'en' },
+          language: { code: 'en_US' },
           components: [
             {
               type: 'body',
@@ -82,12 +82,55 @@ export async function sendBookingConfirmed(
   classDate: string,
   classTime: string
 ) {
-  await sendTemplate(phone, 'azdah_booking_confirmed', [
-    memberName,
-    className,
-    classDate,
-    classTime,
-  ]);
+  await sendTemplate(phone, 'hello_world', []);
+}
+
+// ─── Send expiry reminder to member ──────────────────────────
+// Template: azdah_expiry_reminder
+// Variables: {{1}} = member name, {{2}} = plan name, {{3}} = days left
+export async function sendExpiryReminder(phone: string, name: string, planName: string, daysLeft: string) {
+  await sendTemplate(phone, 'azdah_expiry_reminder', [name, planName, daysLeft]);
+}
+
+// ─── Admin broadcast to a single member ──────────────────────
+// Template: azdah_broadcast
+// Variables: {{1}} = member name, {{2}} = message body
+export async function sendAdminBroadcast(phone: string, name: string, message: string) {
+  await sendTemplate(phone, 'azdah_broadcast', [name, message]);
+}
+
+// ─── Admin reset member password ─────────────────────────────
+// Template: azdah_password_reset
+// Variables: {{1}} = member name, {{2}} = new password
+export async function sendPasswordReset(phone: string, name: string, newPassword: string) {
+  await sendTemplate(phone, 'azdah_password_reset', [name, newPassword]);
+}
+
+// ─── Send class reminder (2 hrs before) ──────────────────────
+// Template: azdah_class_reminder
+// Variables: {{1}} = member name, {{2}} = class name, {{3}} = time
+export async function sendClassReminder(phone: string, name: string, className: string, time: string) {
+  const [h, m] = time.split(':').map(Number);
+  const fmt = `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  await sendTemplate(phone, 'azdah_class_reminder', [name, className, fmt]);
+}
+
+// ─── Waitlist promotion notification ─────────────────────────
+// Template: azdah_waitlist_promoted
+// Variables: {{1}} = member name, {{2}} = class name, {{3}} = date, {{4}} = time
+export async function sendWaitlistPromoted(phone: string, name: string, className: string, classDate: string, classTime: string) {
+  const d = new Date(classDate + 'T00:00:00');
+  const dateFmt = d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  const [h, m] = classTime.split(':').map(Number);
+  const timeFmt = `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
+  await sendTemplate(phone, 'azdah_waitlist_promoted', [name, className, dateFmt, timeFmt]);
+}
+
+// ─── Admin 2FA OTP ────────────────────────────────────────────
+// Template: azdah_admin_otp
+// Variables: {{1}} = OTP code
+export async function sendAdminOtp(phone: string, otp: string) {
+  await sendTemplate(phone, 'azdah_admin_otp', [otp]);
 }
 
 // ─── Send reschedule confirmation ────────────────────────────

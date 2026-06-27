@@ -21,9 +21,13 @@ export async function POST(req: NextRequest) {
 
   const db = getServiceClient();
 
-  // Check reschedule eligibility (once per month via DB function)
-  const { data: canReschedule } = await db.rpc('can_reschedule', { member_uuid: memberId });
-  if (!canReschedule) {
+  // Check reschedule eligibility — double-check directly from DB, not just RPC
+  const { data: memberData } = await db
+    .from('members')
+    .select('reschedule_used_this_month')
+    .eq('id', memberId)
+    .single();
+  if (!memberData || memberData.reschedule_used_this_month) {
     return NextResponse.json({ error: 'You have already rescheduled once this month' }, { status: 400 });
   }
 
@@ -39,6 +43,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Booking not found or already cancelled' }, { status: 404 });
   }
 
+  // Block reschedule if original class already started
+  const { data: oldClass } = await db
+    .from('classes')
+    .select('class_date, start_time')
+    .eq('id', oldBooking.class_id)
+    .single();
+  if (oldClass) {
+    const oldClassDateTime = new Date(`${oldClass.class_date}T${oldClass.start_time}`);
+    if (oldClassDateTime <= new Date()) {
+      return NextResponse.json({ error: 'Cannot reschedule a class that has already started' }, { status: 400 });
+    }
+  }
+
   // Validate new class
   const { data: newClass } = await db
     .from('classes')
@@ -48,6 +65,12 @@ export async function POST(req: NextRequest) {
 
   if (!newClass || newClass.is_cancelled) {
     return NextResponse.json({ error: 'Target class not found or cancelled' }, { status: 404 });
+  }
+
+  // Block reschedule to a class that has already started
+  const newClassDateTime = new Date(`${newClass.class_date}T${newClass.start_time}`);
+  if (newClassDateTime <= new Date()) {
+    return NextResponse.json({ error: 'Cannot reschedule to a class that has already started' }, { status: 400 });
   }
 
   // Check new class capacity

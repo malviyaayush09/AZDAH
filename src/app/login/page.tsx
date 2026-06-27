@@ -12,6 +12,10 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [focused, setFocused] = useState<string | null>(null);
+  // OTP step for admin 2FA
+  const [otpStep, setOtpStep] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [adminPhone, setAdminPhone] = useState('');
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,10 +30,31 @@ export default function LoginPage() {
     });
     const data = await res.json();
     setLoading(false);
-    if (data.success) {
+    if (data.require_otp) {
+      setAdminPhone(full);
+      setOtpStep(true);
+    } else if (data.success) {
       router.push(data.role === 'admin' ? '/admin' : '/dashboard');
     } else {
       setError(data.error || 'Invalid phone or password');
+    }
+  }
+
+  async function handleOtpSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    const res = await fetch('/api/auth/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: adminPhone, otp }),
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (data.success) {
+      router.push('/admin');
+    } else {
+      setError(data.error || 'Invalid OTP');
     }
   }
 
@@ -117,6 +142,40 @@ export default function LoginPage() {
 
           {/* Card */}
           <div style={{ background: 'linear-gradient(145deg,#1A1410,#141009)', border: '1px solid #2A2118', borderRadius: 16, padding: '36px 32px', boxShadow: '0 24px 64px rgba(0,0,0,.5)' }}>
+
+            {/* OTP step */}
+            {otpStep ? (
+              <>
+                <h2 style={{ color: '#F5F0E8', fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Verify Identity</h2>
+                <p style={{ color: '#8A7A6A', fontSize: 13, marginBottom: 28 }}>A 6-digit OTP was sent to your admin WhatsApp number.</p>
+                <form onSubmit={handleOtpSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: 11, color: '#8A7A6A', marginBottom: 8, letterSpacing: '.12em', textTransform: 'uppercase' }}>OTP Code</label>
+                    <input
+                      type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required
+                      value={otp} onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="6-digit code" autoFocus
+                      style={{ width: '100%', background: '#1A1410', border: `1px solid ${focused === 'otp' ? '#F83433' : '#2A2118'}`, borderRadius: 10, padding: '13px 16px', color: '#F5F0E8', fontSize: 20, letterSpacing: '0.3em', textAlign: 'center', fontFamily: 'monospace', transition: 'border-color .15s' }}
+                      onFocus={() => setFocused('otp')} onBlur={() => setFocused(null)}
+                    />
+                  </div>
+                  {error && (
+                    <div style={{ display: 'flex', gap: 8, padding: '10px 12px', background: 'rgba(248,52,51,.08)', border: '1px solid rgba(248,52,51,.25)', borderRadius: 8, color: '#F83433', fontSize: 13, alignItems: 'center' }}>
+                      <AlertCircle size={14} strokeWidth={1.5} style={{ flexShrink: 0 }} />{error}
+                    </div>
+                  )}
+                  <button type="submit" disabled={loading} className="submit-btn"
+                    style={{ marginTop: 4, padding: '14px', background: '#F83433', color: '#fff', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 600 }}>
+                    {loading ? 'Verifying…' : 'Verify OTP'}
+                  </button>
+                  <button type="button" onClick={() => { setOtpStep(false); setOtp(''); setError(''); }}
+                    style={{ background: 'none', border: 'none', color: '#8A7A6A', fontSize: 12, cursor: 'pointer', textAlign: 'center' }}>
+                    ← Back to login
+                  </button>
+                </form>
+              </>
+            ) : (
+            <>
             <h2 style={{ color: '#F5F0E8', fontSize: 20, fontWeight: 700, marginBottom: 6 }}>Welcome back</h2>
             <p style={{ color: '#8A7A6A', fontSize: 13, marginBottom: 28 }}>Sign in to access your member dashboard</p>
 
@@ -180,6 +239,8 @@ export default function LoginPage() {
                 ) : 'Sign In →'}
               </button>
             </form>
+            </>
+            )}
           </div>
 
           {/* Bottom links */}

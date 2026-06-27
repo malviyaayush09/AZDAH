@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3 } from 'lucide-react';
+import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send } from 'lucide-react';
 
 type Member = {
   id: string; name: string; phone: string;
@@ -28,10 +28,21 @@ type ClassBooking = {
 type RevenueData = {
   total_paise: number; total_members: number;
   monthly: { month: string; revenue: number; members: number }[];
+  yearly: { year: string; revenue: number; members: number }[];
   recent: { date: string; plan: string; price_paise: number }[];
 };
+type PromoCode = {
+  id: string; code: string; discount_percent: number;
+  max_uses: number | null; uses_count: number;
+  expires_at: string | null; is_active: boolean; created_at: string;
+};
+type AuditLog = {
+  id: string; admin_phone: string; action: string;
+  entity_type: string | null; entity_id: string | null;
+  details: Record<string, unknown> | null; created_at: string;
+};
 
-type Tab = 'members' | 'calendar' | 'add-class' | 'revenue';
+type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit';
 
 const DARK = '#0D0B08';
 const CARD = '#1A1410';
@@ -95,6 +106,23 @@ export default function AdminPage() {
   const [dupBusy, setDupBusy] = useState<string | null>(null);
   const [statAnim, setStatAnim] = useState(0);
   const [revAnim, setRevAnim] = useState(0);
+  const [memberActionBusy, setMemberActionBusy] = useState<string | null>(null);
+  const [freezeModal, setFreezeModal] = useState<Member | null>(null);
+  const [freezeDays, setFreezeDays] = useState('');
+  const [refundModal, setRefundModal] = useState<Member | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [broadcast, setBroadcast] = useState({ message: '', audience: 'active' as 'all' | 'active' | 'expiring' });
+  const [broadcastBusy, setBroadcastBusy] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<{ sent: number; failed: number } | null>(null);
+  const [recurring, setRecurring] = useState({ title: '', trainer_name: '', days_of_week: [] as number[], start_time: '', end_time: '', capacity: '20', weeks: '4' });
+  const [recurringSaving, setRecurringSaving] = useState(false);
+  const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [newPromo, setNewPromo] = useState({ code: '', discount_percent: '', max_uses: '', expires_at: '' });
+  const [promoSaving, setPromoSaving] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [revView, setRevView] = useState<'monthly' | 'yearly'>('monthly');
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -238,6 +266,124 @@ export default function AdminPage() {
     a.click(); URL.revokeObjectURL(url);
   }
 
+  async function resetPassword(memberId: string) {
+    if (!confirm('Reset this member\'s password and send via WhatsApp?')) return;
+    setMemberActionBusy(memberId + '-reset');
+    const res = await fetch(`/api/admin/members/${memberId}/reset-password`, { method: 'POST' });
+    const data = await res.json();
+    setMemberActionBusy(null);
+    setMsg(data.ok ? { text: 'Password reset — new password sent via WhatsApp', ok: true } : { text: data.error || 'Failed', ok: false });
+  }
+
+  async function submitRefund() {
+    if (!refundModal) return;
+    setMemberActionBusy(refundModal.id + '-refund');
+    const res = await fetch(`/api/admin/members/${refundModal.id}/refund`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: refundReason }),
+    });
+    const data = await res.json();
+    setMemberActionBusy(null);
+    setRefundModal(null); setRefundReason('');
+    setMsg(data.ok ? { text: `Refund ₹${(data.amount/100).toLocaleString('en-IN')} initiated`, ok: true } : { text: data.error || 'Refund failed', ok: false });
+    fetchAll();
+  }
+
+  async function submitFreeze(action: 'freeze' | 'unfreeze') {
+    if (!freezeModal) return;
+    setMemberActionBusy(freezeModal.id + '-freeze');
+    const res = await fetch(`/api/admin/members/${freezeModal.id}/freeze`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, days: action === 'unfreeze' ? parseInt(freezeDays) : undefined }),
+    });
+    const data = await res.json();
+    setMemberActionBusy(null); setFreezeModal(null); setFreezeDays('');
+    if (data.ok) {
+      setMsg({ text: action === 'freeze' ? 'Membership frozen' : `Membership unfrozen — plan extended to ${data.new_plan_end}`, ok: true });
+      fetchAll();
+    } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function sendBroadcast(e: React.FormEvent) {
+    e.preventDefault();
+    setBroadcastBusy(true); setBroadcastResult(null);
+    const res = await fetch('/api/admin/broadcast', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(broadcast),
+    });
+    const data = await res.json();
+    setBroadcastBusy(false);
+    if (data.ok) {
+      setBroadcastResult({ sent: data.sent, failed: data.failed });
+      setBroadcast(prev => ({ ...prev, message: '' }));
+    } else setMsg({ text: data.error || 'Broadcast failed', ok: false });
+  }
+
+  async function createRecurring(e: React.FormEvent) {
+    e.preventDefault();
+    if (!recurring.days_of_week.length) { setMsg({ text: 'Select at least one day', ok: false }); return; }
+    setRecurringSaving(true); setMsg(null);
+    const res = await fetch('/api/admin/classes/recurring', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...recurring, capacity: parseInt(recurring.capacity), weeks: parseInt(recurring.weeks) }),
+    });
+    const data = await res.json();
+    setRecurringSaving(false);
+    if (data.ok) {
+      setMsg({ text: `${data.created} recurring classes created!`, ok: true });
+      setRecurring({ title: '', trainer_name: '', days_of_week: [], start_time: '', end_time: '', capacity: '20', weeks: '4' });
+      fetchAll(); setTab('calendar');
+    } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  function exportRevenueCSV() {
+    window.open('/api/admin/export/revenue', '_blank');
+  }
+
+  async function loadPromoCodes() {
+    setPromoLoading(true);
+    const res = await fetch('/api/admin/promo-codes');
+    const data = await res.json();
+    setPromoCodes(data.codes || []);
+    setPromoLoading(false);
+  }
+
+  async function createPromoCode(e: React.FormEvent) {
+    e.preventDefault(); setPromoSaving(true); setMsg(null);
+    const res = await fetch('/api/admin/promo-codes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: newPromo.code,
+        discount_percent: parseInt(newPromo.discount_percent),
+        max_uses: newPromo.max_uses ? parseInt(newPromo.max_uses) : undefined,
+        expires_at: newPromo.expires_at || undefined,
+      }),
+    });
+    const data = await res.json();
+    setPromoSaving(false);
+    if (data.ok) {
+      setMsg({ text: 'Promo code created!', ok: true });
+      setNewPromo({ code: '', discount_percent: '', max_uses: '', expires_at: '' });
+      loadPromoCodes();
+    } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function togglePromo(id: string, is_active: boolean) {
+    await fetch('/api/admin/promo-codes', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, is_active: !is_active }),
+    });
+    setPromoCodes(prev => prev.map(p => p.id === id ? { ...p, is_active: !is_active } : p));
+  }
+
+  async function loadAuditLog() {
+    setAuditLoading(true);
+    const res = await fetch('/api/admin/audit-log');
+    const data = await res.json();
+    setAuditLogs(data.logs || []);
+    setAuditLoading(false);
+  }
+
   async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); router.push('/login'); }
 
   const weekDates = getWeekDates(weekStart);
@@ -325,8 +471,8 @@ export default function AdminPage() {
 
         {/* ── Tab bar ── */}
         <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, marginBottom:20 }}>
-          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class']] as const).map(([k,l]) => (
-            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); }}
+          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['broadcast','Broadcast'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
+            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); }}
               style={{ padding:'13px 20px', fontSize:13, fontWeight:500, color: tab===k ? ORANGE : MUTED, borderBottom: tab===k ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:-1 }}>
               {l}
             </button>
@@ -496,12 +642,12 @@ export default function AdminPage() {
               </div>
               <button onClick={exportMembersCSV} className="abtn"
                 style={{ padding:'10px 16px', background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:6 }}>
-                <Download size={13} strokeWidth={1.5} /> Export CSV
+                <Download size={13} strokeWidth={1.5} /> Members CSV
               </button>
             </div>
 
             <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-              <div style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 100px', padding:'10px 16px', background:'#131009', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 1fr', padding:'10px 16px', background:'#131009', borderBottom:`1px solid ${BORDER}` }}>
                 {['Member','Plan','Joined','Expires','Status','Actions'].map(h => (
                   <span key={h} style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600 }}>{h}</span>
                 ))}
@@ -510,7 +656,7 @@ export default function AdminPage() {
                 <div style={{ padding:'48px 0', textAlign:'center', color:MUTED, fontSize:13 }}>No members found.</div>
               ) : (
                 filteredMembers.map((m, i) => (
-                  <div key={m.id} className="mrow" style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 100px', padding:'13px 16px', borderBottom: i < filteredMembers.length-1 ? `1px solid ${BORDER}` : 'none', alignItems:'center', background:'transparent' }}>
+                  <div key={m.id} className="mrow" style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 1fr', padding:'13px 16px', borderBottom: i < filteredMembers.length-1 ? `1px solid ${BORDER}` : 'none', alignItems:'center', background:'transparent' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
                       <div style={{ width:34, height:34, borderRadius:'50%', background:avatarColor(m.name), display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'#fff', flexShrink:0 }}>
                         {initials(m.name)}
@@ -529,13 +675,33 @@ export default function AdminPage() {
                     <span style={{ fontSize:11, padding:'3px 8px', borderRadius:999, background: m.is_active ? 'rgba(74,222,128,.1)' : 'rgba(248,113,113,.1)', color: m.is_active ? '#4ade80' : '#f87171', border:`1px solid ${m.is_active ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.25)'}` }}>
                       {m.is_active ? 'Active' : 'Inactive'}
                     </span>
-                    <div style={{ display:'flex', gap:5 }}>
+                    <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                       <a href={`https://wa.me/${m.phone}`} target="_blank" rel="noopener noreferrer" className="abtn"
-                        style={{ fontSize:11, padding:'5px 8px', border:'1px solid rgba(74,222,128,.3)', color:'#4ade80', borderRadius:5, textDecoration:'none', display:'inline-flex', alignItems:'center', gap:4 }}><MessageCircle size={11} strokeWidth={1.5} />Chat</a>
+                        title="WhatsApp Chat"
+                        style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(74,222,128,.3)', color:'#4ade80', borderRadius:5, textDecoration:'none', display:'inline-flex', alignItems:'center' }}><MessageCircle size={11} strokeWidth={1.5} /></a>
                       <button onClick={() => toggleMember(m.id, m.is_active)} className="abtn"
-                        style={{ fontSize:11, padding:'5px 8px', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:5, background:'none', cursor:'pointer' }}>
+                        title={m.is_active ? 'Deactivate' : 'Activate'}
+                        style={{ fontSize:11, padding:'5px 7px', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:5, background:'none', cursor:'pointer' }}>
                         {m.is_active ? 'Off' : 'On'}
                       </button>
+                      <button onClick={() => resetPassword(m.id)} className="abtn"
+                        disabled={memberActionBusy === m.id + '-reset'}
+                        title="Reset password & send via WhatsApp"
+                        style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(139,122,100,.3)', color:MUTED, borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
+                        <RefreshCw size={10} strokeWidth={1.5} />
+                      </button>
+                      <button onClick={() => setFreezeModal(m)} className="abtn"
+                        title="Freeze / Unfreeze membership"
+                        style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
+                        <Snowflake size={10} strokeWidth={1.5} />
+                      </button>
+                      {m.razorpay_payment_id && (
+                        <button onClick={() => setRefundModal(m)} className="abtn"
+                          title="Issue refund"
+                          style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(248,113,113,.3)', color:'#f87171', borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
+                          <RotateCcw size={10} strokeWidth={1.5} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -547,6 +713,12 @@ export default function AdminPage() {
         {/* ════ REVENUE TAB ════ */}
         {tab === 'revenue' && (
           <>
+            <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:14 }}>
+              <button onClick={exportRevenueCSV} className="abtn"
+                style={{ padding:'9px 16px', background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
+                <Download size={13} strokeWidth={1.5} /> Revenue CSV
+              </button>
+            </div>
             {revLoading ? (
               <div style={{ padding:'64px 0', textAlign:'center', color:MUTED, fontSize:14 }}>Loading revenue data…</div>
             ) : !revenue ? (
@@ -569,20 +741,31 @@ export default function AdminPage() {
                   ))}
                 </div>
 
-                {revenue.monthly.length > 0 && (
+                {(revenue.monthly.length > 0 || revenue.yearly?.length > 0) && (
                   <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'20px 24px', marginBottom:24 }}>
-                    <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:16 }}>Monthly Revenue (Last 12 Months)</div>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                      <div style={{ fontSize:13, fontWeight:600, color:CREAM }}>{revView === 'monthly' ? 'Monthly Revenue (Last 12 Months)' : 'Yearly Revenue'}</div>
+                      <div style={{ display:'flex', gap:4 }}>
+                        {(['monthly','yearly'] as const).map(v => (
+                          <button key={v} onClick={() => setRevView(v)}
+                            style={{ padding:'4px 12px', fontSize:11, borderRadius:5, border:`1px solid ${revView===v ? ORANGE : BORDER}`, background:revView===v ? `${ORANGE}18` : 'transparent', color:revView===v ? ORANGE : MUTED, cursor:'pointer' }}>
+                            {v.charAt(0).toUpperCase()+v.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     {(() => {
-                      const max = Math.max(...revenue.monthly.map(m => m.revenue), 1);
+                      const data = revView === 'monthly' ? revenue.monthly : (revenue.yearly || []);
+                      const max = Math.max(...data.map(m => m.revenue), 1);
                       return (
                         <div style={{ display:'flex', alignItems:'flex-end', gap:6, height:120 }}>
-                          {revenue.monthly.map((m, i) => (
+                          {data.map((m, i) => (
                             <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:4, height:'100%', justifyContent:'flex-end' }}>
                               <span style={{ fontSize:10, color:MUTED }}>{m.members}</span>
                               <div title={`₹${(m.revenue/100).toLocaleString('en-IN')} · ${m.members} member${m.members!==1?'s':''}`}
-                                style={{ width:'100%', background:`${ORANGE}`, borderRadius:'3px 3px 0 0', height:`${Math.max(4,(m.revenue/max)*80*revAnim)}px`, opacity:.8+.2*(m.revenue/max), transition:'height .3s', cursor:'default' }} />
+                                style={{ width:'100%', background:ORANGE, borderRadius:'3px 3px 0 0', height:`${Math.max(4,(m.revenue/max)*80*revAnim)}px`, opacity:.8+.2*(m.revenue/max), transition:'height .3s', cursor:'default' }} />
                               <span style={{ fontSize:9, color:MUTED, textAlign:'center', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', width:'100%' }}>
-                                {m.month.replace(' ','\n')}
+                                {'month' in m ? (m as {month:string}).month : (m as {year:string}).year}
                               </span>
                             </div>
                           ))}
@@ -614,36 +797,250 @@ export default function AdminPage() {
 
         {/* ════════════════ ADD CLASS TAB ════════════════ */}
         {tab === 'add-class' && (
-          <div style={{ maxWidth:500 }}>
-            <p style={{ color:MUTED, fontSize:13, marginBottom:20 }}>Fill in the details below to schedule a new class slot for members to book.</p>
-            <form onSubmit={addClass} style={{ display:'flex', flexDirection:'column', gap:14 }}>
-              {([
-                ['Class Title', 'title', 'text', 'e.g. Morning Yoga, HIIT, Pilates', true],
-                ['Trainer Name', 'trainer_name', 'text', 'Optional', false],
-                ['Date', 'class_date', 'date', '', true],
-                ['Start Time', 'start_time', 'time', '', true],
-                ['End Time', 'end_time', 'time', '', true],
-                ['Max Capacity', 'capacity', 'number', '20', true],
-              ] as const).map(([label, key, type, ph, req]) => (
-                <div key={key}>
-                  <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>{label}{req && ' *'}</label>
-                  <input type={type as string}
-                    value={newClass[key as keyof typeof newClass]}
-                    onChange={e => setNewClass({ ...newClass, [key]: e.target.value })}
-                    placeholder={ph as string}
-                    required={req as boolean}
-                    min={key === 'capacity' ? '1' : undefined}
-                    style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }} />
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, maxWidth:1000 }}>
+            {/* Single class */}
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>Single Class</div>
+              <form onSubmit={addClass} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                {([
+                  ['Class Title', 'title', 'text', 'e.g. Morning Yoga, HIIT, Pilates', true],
+                  ['Trainer Name', 'trainer_name', 'text', 'Optional', false],
+                  ['Date', 'class_date', 'date', '', true],
+                  ['Start Time', 'start_time', 'time', '', true],
+                  ['End Time', 'end_time', 'time', '', true],
+                  ['Max Capacity', 'capacity', 'number', '20', true],
+                ] as const).map(([label, key, type, ph, req]) => (
+                  <div key={key}>
+                    <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>{label}{req && ' *'}</label>
+                    <input type={type as string}
+                      value={newClass[key as keyof typeof newClass]}
+                      onChange={e => setNewClass({ ...newClass, [key]: e.target.value })}
+                      placeholder={ph as string}
+                      required={req as boolean}
+                      min={key === 'capacity' ? '1' : undefined}
+                      style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }} />
+                  </div>
+                ))}
+                <button type="submit" disabled={saving}
+                  style={{ marginTop:4, padding:'13px', background: saving ? MUTED : ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer' }}>
+                  {saving ? 'Scheduling...' : 'Schedule Class'}
+                </button>
+              </form>
+            </div>
+
+            {/* Recurring classes */}
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>Recurring Classes</div>
+              <form onSubmit={createRecurring} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+                {([
+                  ['Class Title', 'title', 'text', 'e.g. Morning Yoga', true],
+                  ['Trainer Name', 'trainer_name', 'text', 'Optional', false],
+                  ['Start Time', 'start_time', 'time', '', true],
+                  ['End Time', 'end_time', 'time', '', true],
+                  ['Max Capacity', 'capacity', 'number', '20', true],
+                  ['Weeks to Generate', 'weeks', 'number', '4', true],
+                ] as const).map(([label, key, type, ph, req]) => (
+                  <div key={key}>
+                    <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>{label}{req && ' *'}</label>
+                    <input type={type as string}
+                      value={recurring[key as keyof typeof recurring] as string}
+                      onChange={e => setRecurring({ ...recurring, [key]: e.target.value })}
+                      placeholder={ph as string}
+                      required={req as boolean}
+                      min={key === 'capacity' ? '1' : key === 'weeks' ? '1' : undefined}
+                      max={key === 'weeks' ? '12' : undefined}
+                      style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }} />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:8, textTransform:'uppercase', letterSpacing:'.1em' }}>Days of Week *</label>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d, i) => {
+                      const sel = recurring.days_of_week.includes(i);
+                      return (
+                        <button key={d} type="button"
+                          onClick={() => setRecurring(prev => ({ ...prev, days_of_week: sel ? prev.days_of_week.filter(x => x !== i) : [...prev.days_of_week, i] }))}
+                          style={{ padding:'6px 11px', fontSize:12, borderRadius:6, border:`1px solid ${sel ? ORANGE : BORDER}`, background: sel ? `${ORANGE}18` : 'transparent', color: sel ? ORANGE : MUTED, cursor:'pointer' }}>
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
-              <button type="submit" disabled={saving}
-                style={{ marginTop:4, padding:'13px', background: saving ? MUTED : ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer' }}>
-                {saving ? 'Scheduling...' : 'Schedule Class'}
-              </button>
-            </form>
+                <button type="submit" disabled={recurringSaving}
+                  style={{ marginTop:4, padding:'13px', background: recurringSaving ? MUTED : ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:600, cursor: recurringSaving ? 'not-allowed' : 'pointer' }}>
+                  {recurringSaving ? 'Creating...' : 'Create Recurring'}
+                </button>
+              </form>
+            </div>
           </div>
         )}
+
+        {/* ════════════════ BROADCAST TAB ════════════════ */}
+        {tab === 'broadcast' && (
+          <div style={{ maxWidth:540 }}>
+            <p style={{ color:MUTED, fontSize:13, marginBottom:20 }}>Send a WhatsApp message to a group of members. Uses the <code style={{ color:ORANGE, fontSize:11 }}>azdah_broadcast</code> template.</p>
+            <form onSubmit={sendBroadcast} style={{ display:'flex', flexDirection:'column', gap:14 }}>
+              <div>
+                <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>Audience *</label>
+                <select value={broadcast.audience} onChange={e => setBroadcast({ ...broadcast, audience: e.target.value as 'all' | 'active' | 'expiring' })}
+                  style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }}>
+                  <option value="active">Active members only</option>
+                  <option value="expiring">Expiring in 7 days</option>
+                  <option value="all">All members</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>Message *</label>
+                <textarea value={broadcast.message} onChange={e => setBroadcast({ ...broadcast, message: e.target.value })}
+                  rows={5} placeholder="Type your message here..."
+                  required
+                  style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13, resize:'vertical', fontFamily:'inherit' }} />
+              </div>
+              <button type="submit" disabled={broadcastBusy}
+                style={{ padding:'13px', background: broadcastBusy ? MUTED : ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:600, cursor: broadcastBusy ? 'not-allowed' : 'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                <Send size={15} strokeWidth={1.5} />
+                {broadcastBusy ? 'Sending...' : 'Send Broadcast'}
+              </button>
+            </form>
+            {broadcastResult && (
+              <div style={{ marginTop:16, padding:'14px 18px', background:'rgba(74,222,128,.06)', border:'1px solid rgba(74,222,128,.2)', borderRadius:8 }}>
+                <div style={{ fontSize:13, color:'#4ade80', fontWeight:600 }}>Broadcast sent!</div>
+                <div style={{ fontSize:12, color:MUTED, marginTop:4 }}>{broadcastResult.sent} sent · {broadcastResult.failed} failed</div>
+              </div>
+            )}
+          </div>
+        )}
+        {/* ════════════════ PROMO CODES TAB ════════════════ */}
+        {tab === 'promo' && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, maxWidth:900 }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>Create Promo Code</div>
+              <form onSubmit={createPromoCode} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {([
+                  ['Code', 'code', 'text', 'e.g. AZDAH20', true],
+                  ['Discount %', 'discount_percent', 'number', '20', true],
+                  ['Max Uses', 'max_uses', 'number', 'Unlimited', false],
+                  ['Expires At', 'expires_at', 'datetime-local', '', false],
+                ] as const).map(([label, key, type, ph, req]) => (
+                  <div key={key}>
+                    <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:5, textTransform:'uppercase', letterSpacing:'.1em' }}>{label}{req && ' *'}</label>
+                    <input type={type as string}
+                      value={newPromo[key as keyof typeof newPromo]}
+                      onChange={e => setNewPromo({ ...newPromo, [key]: e.target.value })}
+                      placeholder={ph as string} required={req as boolean}
+                      min={key === 'discount_percent' ? '1' : key === 'max_uses' ? '1' : undefined}
+                      max={key === 'discount_percent' ? '100' : undefined}
+                      style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'10px 14px', color:CREAM, fontSize:13 }} />
+                  </div>
+                ))}
+                <button type="submit" disabled={promoSaving}
+                  style={{ padding:'12px', background:promoSaving?MUTED:ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', marginTop:4 }}>
+                  {promoSaving ? 'Creating…' : 'Create Code'}
+                </button>
+              </form>
+            </div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>All Codes</div>
+              {promoLoading ? <div style={{ color:MUTED, fontSize:13 }}>Loading…</div> : promoCodes.length === 0 ? <div style={{ color:MUTED, fontSize:13 }}>No codes yet.</div> : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {promoCodes.map(p => (
+                    <div key={p.id} style={{ background:CARD, border:`1px solid ${p.is_active ? BORDER : '#1a1a1a'}`, borderRadius:8, padding:'12px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', opacity:p.is_active ? 1 : 0.5 }}>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:700, color:CREAM, letterSpacing:'.08em' }}>{p.code}</div>
+                        <div style={{ fontSize:11, color:MUTED, marginTop:2 }}>
+                          {p.discount_percent}% off · {p.uses_count}/{p.max_uses ?? '∞'} used
+                          {p.expires_at && ` · exp ${fmtDate(p.expires_at)}`}
+                        </div>
+                      </div>
+                      <button onClick={() => togglePromo(p.id, p.is_active)} className="abtn"
+                        style={{ fontSize:11, padding:'5px 10px', border:`1px solid ${BORDER}`, color:p.is_active?'#f87171':'#4ade80', borderRadius:5, background:'none', cursor:'pointer' }}>
+                        {p.is_active ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ════════════════ AUDIT LOG TAB ════════════════ */}
+        {tab === 'audit' && (
+          <div style={{ maxWidth:860 }}>
+            {auditLoading ? <div style={{ color:MUTED, fontSize:13 }}>Loading…</div> : auditLogs.length === 0 ? <div style={{ color:MUTED, fontSize:13 }}>No audit entries yet.</div> : (
+              <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1.8fr 1.2fr 1fr 1fr', padding:'10px 16px', background:'#131009', borderBottom:`1px solid ${BORDER}` }}>
+                  {['Action','Admin','Entity','Time'].map(h => (
+                    <span key={h} style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600 }}>{h}</span>
+                  ))}
+                </div>
+                {auditLogs.map((l, i) => (
+                  <div key={l.id} style={{ display:'grid', gridTemplateColumns:'1.8fr 1.2fr 1fr 1fr', padding:'11px 16px', borderBottom: i < auditLogs.length-1 ? `1px solid ${BORDER}` : 'none', alignItems:'center' }}>
+                    <span style={{ fontSize:12, color:CREAM, fontWeight:500 }}>{l.action.replace(/_/g,' ')}</span>
+                    <span style={{ fontSize:11, color:MUTED }}>{l.admin_phone}</span>
+                    <span style={{ fontSize:11, color:MUTED }}>{l.entity_type || '—'}</span>
+                    <span style={{ fontSize:11, color:MUTED }}>{new Date(l.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
+
+      {/* ════ FREEZE MODAL ════ */}
+      {freezeModal && (
+        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setFreezeModal(null); }}>
+          <div className="modal-box" style={{ maxWidth:380, padding:'24px' }}>
+            <div style={{ fontSize:15, fontWeight:600, color:CREAM, marginBottom:4 }}>Freeze Membership</div>
+            <div style={{ fontSize:13, color:MUTED, marginBottom:20 }}>{freezeModal.name} · {freezeModal.plan_name}</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <button onClick={() => submitFreeze('freeze')} disabled={memberActionBusy === freezeModal.id + '-freeze'}
+                style={{ padding:'11px', background:'rgba(96,165,250,.1)', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                Freeze Now
+              </button>
+              <div style={{ fontSize:11, color:MUTED, textAlign:'center' }}>— or unfreeze & extend —</div>
+              <input type="number" placeholder="Days frozen (to extend plan end)" value={freezeDays} onChange={e => setFreezeDays(e.target.value)}
+                min="1" style={{ background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'10px 14px', color:CREAM, fontSize:13, width:'100%' }} />
+              <button onClick={() => submitFreeze('unfreeze')} disabled={!freezeDays || memberActionBusy === freezeModal.id + '-freeze'}
+                style={{ padding:'11px', background:ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                Unfreeze & Extend Plan
+              </button>
+              <button onClick={() => setFreezeModal(null)}
+                style={{ padding:'8px', background:'none', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:8, fontSize:12, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ REFUND MODAL ════ */}
+      {refundModal && (
+        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setRefundModal(null); }}>
+          <div className="modal-box" style={{ maxWidth:380, padding:'24px' }}>
+            <div style={{ fontSize:15, fontWeight:600, color:CREAM, marginBottom:4 }}>Issue Refund</div>
+            <div style={{ fontSize:13, color:MUTED, marginBottom:20 }}>{refundModal.name} · {refundModal.plan_name}</div>
+            <div style={{ fontSize:12, color:'#fbbf24', background:'rgba(251,191,36,.06)', border:'1px solid rgba(251,191,36,.2)', borderRadius:6, padding:'10px 12px', marginBottom:14 }}>
+              Full plan amount will be refunded via Razorpay. Member will be deactivated.
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              <input placeholder="Reason (optional)" value={refundReason} onChange={e => setRefundReason(e.target.value)}
+                style={{ background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'10px 14px', color:CREAM, fontSize:13, width:'100%' }} />
+              <button onClick={submitRefund} disabled={memberActionBusy === refundModal.id + '-refund'}
+                style={{ padding:'11px', background:'rgba(248,113,113,.15)', border:'1px solid rgba(248,113,113,.3)', color:'#f87171', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer' }}>
+                {memberActionBusy === refundModal.id + '-refund' ? 'Processing...' : 'Confirm Refund'}
+              </button>
+              <button onClick={() => { setRefundModal(null); setRefundReason(''); }}
+                style={{ padding:'8px', background:'none', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:8, fontSize:12, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════ CLASS BOOKINGS MODAL ════════════════ */}
       {viewingClass && (

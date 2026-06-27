@@ -8,6 +8,7 @@ type MemberInfo = {
   id: string; name: string; phone: string;
   plan_name: string; plan_start: string; plan_end: string;
   days_remaining: number; reschedule_used: boolean;
+  must_change_password?: boolean; is_frozen?: boolean;
 };
 type ClassSlot = {
   id: string; title: string; trainer_name: string | null;
@@ -103,6 +104,8 @@ export default function DashboardPage() {
     setMyBookings(cData.myBookings || []);
     if (sData.total_attended !== undefined) setStats(sData);
     setLoading(false);
+    // Force password change on first login
+    if (mData.member?.must_change_password) setShowPwModal(true);
   }
 
   async function loadHistory() {
@@ -162,7 +165,7 @@ export default function DashboardPage() {
   async function changePassword(e: React.FormEvent) {
     e.preventDefault(); setPwMsg(null);
     if (pwForm.newPw !== pwForm.confirm) { setPwMsg({text:'Passwords do not match',ok:false}); return; }
-    if (pwForm.newPw.length < 6) { setPwMsg({text:'Password must be at least 6 characters',ok:false}); return; }
+    if (pwForm.newPw.length < 8) { setPwMsg({text:'Password must be at least 8 characters',ok:false}); return; }
     setPwBusy(true);
     const res = await fetch('/api/member/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:pwForm.current,newPassword:pwForm.newPw})});
     const data = await res.json();
@@ -170,6 +173,8 @@ export default function DashboardPage() {
     if (data.success) {
       setPwMsg({text:'Password changed successfully!',ok:true});
       setPwForm({current:'',newPw:'',confirm:''});
+      // Clear must_change_password flag in local state so modal becomes dismissable
+      setMember(prev => prev ? { ...prev, must_change_password: false } : prev);
       setTimeout(()=>setShowPwModal(false),1500);
     } else setPwMsg({text:data.error||'Failed',ok:false});
   }
@@ -594,14 +599,22 @@ export default function DashboardPage() {
 
       {/* ── Change Password Modal ── */}
       {showPwModal&&(
-        <div className="modal-bg" onClick={e=>{if(e.target===e.currentTarget)setShowPwModal(false);}}>
+        <div className="modal-bg" onClick={e=>{if(e.target===e.currentTarget&&!member?.must_change_password)setShowPwModal(false);}}>
           <div className="modal-card" style={{padding:'28px 28px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
               <div>
-                <h3 style={{color:CREAM,fontSize:16,fontWeight:700,margin:0}}>Change Password</h3>
-                <p style={{color:MUTED,fontSize:12,marginTop:3}}>Choose a strong password (min 6 characters)</p>
+                <h3 style={{color:CREAM,fontSize:16,fontWeight:700,margin:0}}>
+                  {member?.must_change_password ? 'Set Your Password' : 'Change Password'}
+                </h3>
+                <p style={{color:MUTED,fontSize:12,marginTop:3}}>
+                  {member?.must_change_password
+                    ? 'Please set a new password before continuing. The temporary password was sent to you via WhatsApp.'
+                    : 'Choose a strong password (min 8 characters)'}
+                </p>
               </div>
-              <button onClick={()=>setShowPwModal(false)} style={{background:'none',border:'none',color:MUTED,cursor:'pointer',fontSize:22,lineHeight:1,padding:0}}>×</button>
+              {!member?.must_change_password&&(
+                <button onClick={()=>setShowPwModal(false)} style={{background:'none',border:'none',color:MUTED,cursor:'pointer',fontSize:22,lineHeight:1,padding:0}}>×</button>
+              )}
             </div>
             <form onSubmit={changePassword} style={{display:'flex',flexDirection:'column',gap:14}}>
               {([

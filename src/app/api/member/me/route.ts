@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const db = getServiceClient();
   const { data: member } = await db
     .from('members')
-    .select('id, name, phone, plan_id, plan_start, plan_end, reschedule_used_this_month, reschedule_reset_date, membership_plans(name)')
+    .select('id, name, phone, plan_id, plan_start, plan_end, reschedule_used_this_month, reschedule_reset_date, must_change_password, is_frozen, membership_plans(name)')
     .eq('id', memberId)
     .single();
 
@@ -48,6 +48,8 @@ export async function GET(req: NextRequest) {
       plan_end: member.plan_end,
       days_remaining: daysRemaining,
       reschedule_used: rescheduleUsed,
+      must_change_password: member.must_change_password ?? false,
+      is_frozen: member.is_frozen ?? false,
     },
   });
 }

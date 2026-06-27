@@ -175,7 +175,9 @@ export default function HomePage() {
 
   // checkout
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
-  const [form, setForm] = useState({ name: '', phone: '', email: '' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', promoCode: '' });
+  const [promoStatus, setPromoStatus] = useState<{ valid: boolean; discount: number; msg: string } | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
   const [payLoading, setPayLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const [checkoutDone, setCheckoutDone] = useState(false);
@@ -238,8 +240,24 @@ export default function HomePage() {
     setSelectedPlan(plan);
     setCheckoutError('');
     setCheckoutDone(false);
-    setForm({ name: '', phone: '', email: '' });
+    setForm({ name: '', phone: '', email: '', promoCode: '' });
   };
+
+  async function checkPromo() {
+    if (!form.promoCode.trim() || !selectedPlan) return;
+    setPromoChecking(true); setPromoStatus(null);
+    const res = await fetch('/api/promo/validate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: form.promoCode, planId: selectedPlan.id }),
+    });
+    const data = await res.json();
+    setPromoChecking(false);
+    if (data.valid) {
+      setPromoStatus({ valid: true, discount: data.discount_percent, msg: `${data.discount_percent}% off applied!` });
+    } else {
+      setPromoStatus({ valid: false, discount: 0, msg: data.error || 'Invalid code' });
+    }
+  }
 
   async function handlePay(e: React.FormEvent) {
     e.preventDefault();
@@ -271,7 +289,7 @@ export default function HomePage() {
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: selectedPlan.id, phone: fullPhone, name: trimmedName, email: form.email }),
+        body: JSON.stringify({ planId: selectedPlan.id, phone: fullPhone, name: trimmedName, email: form.email, promoCode: form.promoCode || undefined }),
       });
       const order = await orderRes.json();
       if (orderRes.status === 409) {
@@ -286,7 +304,7 @@ export default function HomePage() {
       const rzp = new window.Razorpay({
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
         order_id: order.orderId,
-        amount: selectedPlan.price_paise,
+        amount: order.amount,
         currency: 'INR',
         name: 'AZDAH Fitness',
         description: `${selectedPlan.name} Membership`,
@@ -870,6 +888,25 @@ export default function HomePage() {
                   </div>
                 </div>
 
+                {/* Promo code */}
+                <div style={{ marginTop: 16 }}>
+                  <label style={{ display: 'block', color: MUTED, fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 7 }}>Promo Code <span style={{ opacity: 0.5 }}>(optional)</span></label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input type="text" value={form.promoCode} onChange={(e) => { setForm({ ...form, promoCode: e.target.value.toUpperCase() }); setPromoStatus(null); }}
+                      placeholder="e.g. AZDAH20" maxLength={20}
+                      style={{ flex: 1, background: DARK, border: '1px solid rgba(241,233,218,0.14)', borderRadius: 2, padding: '12px 14px', color: CREAM, fontSize: 14, outline: 'none', textTransform: 'uppercase', letterSpacing: '0.1em' }} />
+                    <button type="button" onClick={checkPromo} disabled={promoChecking || !form.promoCode.trim()}
+                      style={{ padding: '12px 16px', background: 'transparent', border: '1px solid rgba(241,233,218,0.2)', borderRadius: 2, color: CREAM, fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap', opacity: promoChecking || !form.promoCode.trim() ? 0.5 : 1 }}>
+                      {promoChecking ? '...' : 'Apply'}
+                    </button>
+                  </div>
+                  {promoStatus && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: promoStatus.valid ? '#4ade80' : '#f87171' }}>
+                      {promoStatus.valid ? `✓ ${promoStatus.msg}` : `✗ ${promoStatus.msg}`}
+                    </div>
+                  )}
+                </div>
+
                 {checkoutError && (
                   <div style={{ marginTop: 16, padding: '12px 14px', background: 'rgba(248,52,51,0.1)', border: '1px solid rgba(248,52,51,0.3)', borderRadius: 2, color: '#FF8060', fontSize: 13 }}>
                     {checkoutError}
@@ -881,7 +918,9 @@ export default function HomePage() {
                   color: DARK, fontWeight: 700, fontSize: 13.5, letterSpacing: '0.06em', textTransform: 'uppercase',
                   opacity: payLoading ? 0.65 : 1,
                 }}>
-                  {payLoading ? 'Processing…' : `Pay ${formatPrice(selectedPlan.price_paise)} →`}
+                  {payLoading ? 'Processing…' : promoStatus?.valid
+                    ? `Pay ${formatPrice(Math.round(selectedPlan.price_paise * (1 - promoStatus.discount / 100)))} →`
+                    : `Pay ${formatPrice(selectedPlan.price_paise)} →`}
                 </button>
                 <p style={{ color: FAINT, fontSize: 11, textAlign: 'center', marginTop: 12 }}>Secured by Razorpay · 256-bit SSL encryption</p>
               </form>
