@@ -23,7 +23,7 @@ const bodoniModa = Bodoni_Moda({
 export const metadata: Metadata = {
   title: 'AZDAH Fitness · Bangalore',
   description: 'Movement, aerial arts & holistic fitness studio in Bangalore. Join AZDAH.',
-  icons: { icon: '/azdahlogo.png' },
+  icons: { icon: '/icon.svg' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
