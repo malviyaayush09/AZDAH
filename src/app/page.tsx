@@ -141,7 +141,7 @@ const GALLERY = [
 // ─── FAQ ──────────────────────────────────────────────────────
 const FAQS = [
   { q: 'Do I need prior experience to join?', a: 'Not at all. Every discipline at AZDAH has beginner-friendly batches. Our coaches will assess your level on day one and guide you into the right class.' },
-  { q: 'Can I try before buying a membership?', a: 'Yes! We offer a trial class. Reach out to us on WhatsApp and we will slot you into the next available session before you commit.' },
+  { q: 'Can I try before buying a membership?', a: 'Yes! We offer a trial class at no cost. Just tap the button below to WhatsApp us and we will slot you into the next available session before you commit.' },
   { q: 'What does the membership include?', a: 'All plans give you full access to every discipline — Aerial, Pole, Pilates, Dance, Yoga, and more. No per-class charges, no hidden fees.' },
   { q: 'Can I freeze or pause my membership?', a: 'Yes, members can pause their membership for up to 15 days per plan cycle. Contact us on WhatsApp at least 24 hours in advance.' },
   { q: 'What if I miss a class I booked?', a: 'You can cancel up to 2 hours before the class starts from your member dashboard. You also get one free reschedule per month.' },
@@ -698,7 +698,19 @@ export default function HomePage() {
               );
             })}
           </div>
-          <p style={{ color: MUTED, fontSize: 14, textAlign: 'center', marginTop: 48 }}>
+          {/* Trial class CTA */}
+          <div style={{ marginTop: 48, background: CARD, border: '1px solid rgba(248,52,51,0.2)', borderRadius: 8, padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
+            <div>
+              <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: CREAM, marginBottom: 6 }}>Try a free class first</div>
+              <div style={{ color: MUTED, fontSize: 14 }}>No commitment. Come in, move, and decide after.</div>
+            </div>
+            <a href="https://wa.me/919999999999?text=Hi%2C%20I%27d%20like%20to%20book%20a%20free%20trial%20class%20at%20AZDAH!" target="_blank" rel="noopener noreferrer"
+              style={{ background: ORANGE, color: '#fff', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '13px 26px', borderRadius: 2, textDecoration: 'none', flexShrink: 0 }}>
+              Book Free Trial →
+            </a>
+          </div>
+
+          <p style={{ color: MUTED, fontSize: 14, textAlign: 'center', marginTop: 32 }}>
             Still have questions?{' '}
             <a href="https://wa.me/919999999999" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, textDecoration: 'underline' }}>
               Chat with us on WhatsApp →
@@ -741,7 +753,7 @@ export default function HomePage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60 }} className="phil-grid">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
               {[
-                { label: 'Studio', text: 'AZDAH Fitness, Indiranagar, Bangalore — 560038' },
+                { label: 'Studio', text: '549/3, 9th A Main, Indiranagar\nBangalore — 560038\n(Left of Copper + Clove, PCI Gases building)' },
                 { label: 'Hours', text: 'Mon – Sat: 6:00 AM – 9:00 PM\nSunday: 7:00 AM – 2:00 PM' },
                 { label: 'WhatsApp', text: '+91 99999 99999' },
                 { label: 'Email', text: 'hello@azdahfit.in' },
@@ -752,16 +764,30 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            {/* Map placeholder */}
-            <div style={{ background: CARD, borderRadius: 2, minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(241,233,218,0.07)' }}>
-              <div style={{ textAlign: 'center', color: FAINT }}>
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style={{ opacity: 0.35 }}>
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke={CREAM} strokeWidth="1.2"/>
-                  <circle cx="12" cy="9" r="2.5" stroke={CREAM} strokeWidth="1.2"/>
+            {/* Map card */}
+            <a
+              href="https://maps.google.com/?q=549%2F3+9th+A+Main+Indiranagar+Bangalore+560038"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: 'none', display: 'block' }}
+            >
+              <div style={{ background: CARD, borderRadius: 2, minHeight: 320, border: '1px solid rgba(241,233,218,0.1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 40, cursor: 'pointer', transition: 'border-color 0.2s' }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(248,52,51,0.4)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(241,233,218,0.1)')}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="rgba(248,52,51,0.15)" stroke={ORANGE} strokeWidth="1.2"/>
+                  <circle cx="12" cy="9" r="2.5" fill={ORANGE} />
                 </svg>
-                <p style={{ fontSize: 11, marginTop: 10, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Map embed</p>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ color: CREAM, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>549/3, 9th A Main</div>
+                  <div style={{ color: MUTED, fontSize: 13, lineHeight: 1.6 }}>Indiranagar, Bangalore — 560038<br />Left of Copper + Clove, PCI Gases building</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: ORANGE, color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 20px', borderRadius: 2 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                  Open in Google Maps
+                </div>
               </div>
-            </div>
+            </a>
           </div>
         </div>
       </section>
@@ -794,7 +820,11 @@ export default function HomePage() {
           </div>
           <div style={{ borderTop: '1px solid rgba(241,233,218,0.07)', paddingTop: 28, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <p style={{ color: FAINT, fontSize: 12, margin: 0 }}>© 2026 AZDAH Fitness · Bangalore, India</p>
-            <p style={{ color: FAINT, fontSize: 12, margin: 0 }}>Payments secured by Razorpay</p>
+            <div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Link href="/privacy" style={{ color: FAINT, fontSize: 12, textDecoration: 'none' }}>Privacy Policy</Link>
+              <Link href="/terms" style={{ color: FAINT, fontSize: 12, textDecoration: 'none' }}>Terms & Conditions</Link>
+              <span style={{ color: FAINT, fontSize: 12 }}>Payments secured by Razorpay</span>
+            </div>
           </div>
         </div>
       </footer>

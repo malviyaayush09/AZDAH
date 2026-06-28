@@ -23,7 +23,7 @@ const nextConfig = {
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
               "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://graph.facebook.com",
-              "frame-src https://api.razorpay.com",
+              "frame-src https://api.razorpay.com https://www.openstreetmap.org",
             ].join('; '),
           },
         ],
