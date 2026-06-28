@@ -119,5 +119,5 @@ export async function POST(req: NextRequest) {
     sendAdminNewMember(name, phone, plan.name, plan.price_paise),
   ]).catch((err) => console.error('WhatsApp send error:', err));
 
-  return NextResponse.json({ success: true, phone, name, password: rawPassword });
+  return NextResponse.json({ success: true, phone, name, password: rawPassword, plan_end: toDate(endDate) });
 }

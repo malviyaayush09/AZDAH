@@ -190,8 +190,11 @@ export default function LoginPage() {
               Not a member?{' '}
               <a href="/#plans" style={{ color: '#F83433', textDecoration: 'none', fontWeight: 500 }}>View Plans →</a>
             </p>
-            <p style={{ fontSize: 12, color: '#3A2B1E', textAlign: 'center' }}>
-              Forgot password? WhatsApp the studio and we&apos;ll reset it.
+            <p style={{ fontSize: 12, color: '#8A7A6A', textAlign: 'center' }}>
+              Forgot password?{' '}
+              <a href="https://wa.me/919999999999?text=Hi%2C%20I%20need%20help%20resetting%20my%20AZDAH%20password" target="_blank" rel="noopener noreferrer" style={{ color: '#F83433', textDecoration: 'none' }}>
+                WhatsApp us →
+              </a>
             </p>
           </div>
         </div>
