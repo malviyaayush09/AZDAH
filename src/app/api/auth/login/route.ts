@@ -3,7 +3,6 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifyPassword, signSession } from '@/lib/auth';
-import { sendAdminOtp } from '@/lib/whatsapp';
 
 const ADMIN_PHONE = process.env.ADMIN_PHONE;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -55,19 +54,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many failed attempts. Try again in 15 minutes.' }, { status: 429 });
   }
 
-  // Admin check — password correct → send OTP, require second step
+  // Admin check — direct login, no OTP for now
   if (ADMIN_PHONE && ADMIN_PASSWORD && phone === ADMIN_PHONE && password === ADMIN_PASSWORD) {
     await recordAttempt(db, phone, true);
-
-    // Generate 6-digit OTP valid for 10 minutes
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    await db.from('admin_otp').insert({ phone, otp, expires_at: expiresAt });
-
-    // Send OTP via WhatsApp (fire & forget — don't block if WA is down)
-    sendAdminOtp(phone, otp).catch((e) => console.error('Admin OTP WA failed:', e));
-
-    return NextResponse.json({ success: true, require_otp: true });
+    const token = await signSession({ role: 'admin', phone });
+    const res = NextResponse.json({ success: true, role: 'admin' });
+    res.cookies.set('session', token, COOKIE_OPTS);
+    return res;
   }
 
   // Member login
