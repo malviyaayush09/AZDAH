@@ -86,17 +86,20 @@ export async function POST(req: NextRequest) {
     .eq('id', memberId)
     .single();
 
-  // Execute reschedule in order:
-  // 1. Mark old booking as rescheduled
-  // 2. Create new booking
-  // 3. Mark reschedule_used_this_month = true
-  const [r1, r2, r3] = await Promise.all([
-    db.from('bookings').update({ status: 'rescheduled' }).eq('id', oldBookingId),
-    db.from('bookings').insert({ member_id: memberId, class_id: newClassId, status: 'confirmed', rescheduled_from: oldBookingId }),
-    db.from('members').update({ reschedule_used_this_month: true }).eq('id', memberId),
-  ]);
+  // Execute reschedule sequentially so partial failures can be rolled back
+  const r1 = await db.from('bookings').update({ status: 'rescheduled' }).eq('id', oldBookingId);
+  if (r1.error) return NextResponse.json({ error: 'Reschedule failed' }, { status: 500 });
 
-  if (r1.error || r2.error || r3.error) {
+  const r2 = await db.from('bookings').insert({ member_id: memberId, class_id: newClassId, status: 'confirmed', rescheduled_from: oldBookingId });
+  if (r2.error) {
+    await db.from('bookings').update({ status: 'confirmed' }).eq('id', oldBookingId);
+    return NextResponse.json({ error: 'Reschedule failed' }, { status: 500 });
+  }
+
+  const r3 = await db.from('members').update({ reschedule_used_this_month: true }).eq('id', memberId);
+  if (r3.error) {
+    await db.from('bookings').update({ status: 'confirmed' }).eq('id', oldBookingId);
+    await db.from('bookings').delete().eq('rescheduled_from', oldBookingId).eq('member_id', memberId);
     return NextResponse.json({ error: 'Reschedule failed' }, { status: 500 });
   }
 

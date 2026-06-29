@@ -18,6 +18,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { memberId: 
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { is_active } = await req.json();
+  if (typeof is_active !== 'boolean') {
+    return NextResponse.json({ error: 'is_active must be a boolean' }, { status: 400 });
+  }
   const db = getServiceClient();
   const { error } = await db.from('members').update({ is_active }).eq('id', params.memberId);
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 });

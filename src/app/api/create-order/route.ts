@@ -100,10 +100,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  // Increment promo uses
+  // Increment promo uses — optimistic lock on uses_count to prevent race conditions
   if (validatedPromo) {
-    const { data: p } = await db.from('promo_codes').select('uses_count').eq('code', validatedPromo).single();
-    if (p) await db.from('promo_codes').update({ uses_count: p.uses_count + 1 }).eq('code', validatedPromo);
+    const { data: p } = await db.from('promo_codes').select('uses_count, max_uses').eq('code', validatedPromo).single();
+    if (p) {
+      await db.from('promo_codes')
+        .update({ uses_count: p.uses_count + 1 })
+        .eq('code', validatedPromo)
+        .eq('uses_count', p.uses_count); // only updates if count hasn't changed since we last read
+    }
   }
 
   // Store pending intent in DB

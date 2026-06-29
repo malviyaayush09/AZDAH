@@ -15,6 +15,12 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
 
   const { amount_paise, reason } = await req.json() as { amount_paise?: number; reason?: string };
 
+  if (amount_paise !== undefined) {
+    if (!Number.isInteger(amount_paise) || amount_paise <= 0) {
+      return NextResponse.json({ error: 'amount_paise must be a positive integer' }, { status: 400 });
+    }
+  }
+
   const db = getServiceClient();
   const { data: member } = await db
     .from('members')
@@ -32,6 +38,10 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
   const refundAmount = amount_paise ?? plan?.price_paise;
   if (!refundAmount) {
     return NextResponse.json({ error: 'Could not determine refund amount' }, { status: 400 });
+  }
+
+  if (plan && refundAmount > plan.price_paise) {
+    return NextResponse.json({ error: 'Refund amount exceeds original payment' }, { status: 400 });
   }
 
   const rpKeyId = process.env.RAZORPAY_KEY_ID!;
