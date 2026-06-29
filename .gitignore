@@ -4,3 +4,6 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# Test endpoints — never deploy these
+src/app/api/test-whatsapp/
