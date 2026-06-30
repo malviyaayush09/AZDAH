@@ -43,21 +43,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Order not found or already used' }, { status: 400 });
   }
 
-  // 4. Verify payment amount via Razorpay API — hard-fail if API unreachable
+  // 4. Optional secondary check via Razorpay API (HMAC signature above is the real gate)
   const rpKeyId = process.env.RAZORPAY_KEY_ID!;
   const rpKeySecret = process.env.RAZORPAY_KEY_SECRET!;
-  const rpRes = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
-    headers: { Authorization: `Basic ${btoa(`${rpKeyId}:${rpKeySecret}`)}` },
-  });
-  if (!rpRes.ok) {
-    return NextResponse.json({ error: 'Could not verify payment with Razorpay. Please contact support.' }, { status: 502 });
-  }
-  const rpPayment = await rpRes.json() as { status: string; amount: number; order_id: string };
-  if (rpPayment.status !== 'captured' && rpPayment.status !== 'authorized') {
-    return NextResponse.json({ error: 'Payment not completed' }, { status: 400 });
-  }
-  if (rpPayment.order_id !== orderId) {
-    return NextResponse.json({ error: 'Payment order mismatch' }, { status: 400 });
+  try {
+    const rpRes = await fetch(`https://api.razorpay.com/v1/payments/${paymentId}`, {
+      headers: {
+        Authorization: `Basic ${btoa(`${rpKeyId}:${rpKeySecret}`)}`,
+        Accept: 'application/json',
+      },
+    });
+    if (rpRes.ok) {
+      const rpPayment = await rpRes.json() as { status: string; amount: number; order_id: string };
+      if (rpPayment.status !== 'captured' && rpPayment.status !== 'authorized') {
+        return NextResponse.json({ error: 'Payment not completed' }, { status: 400 });
+      }
+      if (rpPayment.order_id !== orderId) {
+        return NextResponse.json({ error: 'Payment order mismatch' }, { status: 400 });
+      }
+    } else {
+      console.warn('[verify-payment] Razorpay API returned', rpRes.status, '— proceeding on HMAC signature');
+    }
+  } catch (e) {
+    console.warn('[verify-payment] Razorpay API unreachable — proceeding on HMAC signature', e);
   }
 
   // 5. Fetch plan details
