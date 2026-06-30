@@ -18,11 +18,14 @@ export function getServiceClient() {
 export type MembershipPlan = {
   id: string;
   name: string;
+  description: string | null;
   duration_days: number;
   price_paise: number;
   sessions_per_week: number;
   features: string[];
   sort_order: number;
+  classes_included: number | null;
+  plan_category: string;
 };
 
 export type Member = {

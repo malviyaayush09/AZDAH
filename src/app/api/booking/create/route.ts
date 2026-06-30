@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   // Fetch class and member
   const [{ data: cls }, { data: member }] = await Promise.all([
     db.from('classes').select('*').eq('id', classId).single(),
-    db.from('members').select('phone, name, plan_end, is_active').eq('id', memberId).single(),
+    db.from('members').select('phone, name, plan_end, plan_start, plan_id, is_active').eq('id', memberId).single(),
   ]);
 
   if (!cls) return NextResponse.json({ error: 'Class not found' }, { status: 404 });
@@ -49,6 +49,30 @@ export async function POST(req: NextRequest) {
   // Check membership not expired
   if (member.plan_end && new Date(member.plan_end) < new Date()) {
     return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
+  }
+
+  // Check class pack not exhausted (only if plan has a classes_included limit)
+  if (member.plan_id) {
+    const { data: planData } = await db
+      .from('membership_plans')
+      .select('classes_included')
+      .eq('id', member.plan_id)
+      .single();
+    if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
+      const { count: usedCount } = await db
+        .from('bookings')
+        .select('*', { count: 'exact', head: true })
+        .eq('member_id', memberId)
+        .in('status', ['confirmed', 'attended'])
+        .gte('created_at', (member.plan_start || '1970-01-01') + 'T00:00:00Z');
+      if ((usedCount || 0) >= planData.classes_included) {
+        const n = planData.classes_included;
+        return NextResponse.json(
+          { error: `All ${n} class${n !== 1 ? 'es' : ''} in your pack have been used. Please purchase a new pack to continue.` },
+          { status: 400 }
+        );
+      }
+    }
   }
 
   // Atomic capacity check + insert — prevents race conditions

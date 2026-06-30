@@ -33,10 +33,11 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
 
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 });
 
-  // Send via WhatsApp (fire & forget)
+  // Send via WhatsApp (fire & forget). Also return the password so the admin
+  // can relay it manually — critical while the WhatsApp API isn't live yet.
   sendPasswordReset(member.phone, member.name, newPassword).catch((e) =>
     console.error('WhatsApp password reset failed:', e)
   );
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, password: newPassword, phone: member.phone, name: member.name });
 }

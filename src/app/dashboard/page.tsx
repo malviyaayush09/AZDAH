@@ -8,6 +8,7 @@ type MemberInfo = {
   id: string; name: string; phone: string;
   plan_name: string; plan_start: string; plan_end: string;
   days_remaining: number; reschedule_used: boolean;
+  classes_included: number | null; classes_remaining: number | null;
   must_change_password?: boolean; is_frozen?: boolean;
 };
 type ClassSlot = {

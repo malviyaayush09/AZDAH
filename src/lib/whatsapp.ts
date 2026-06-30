@@ -9,6 +9,10 @@ async function sendTemplate(
   templateName: string,
   params: string[]
 ) {
+  // Master kill switch — WhatsApp stays off until the Cloud API is live.
+  // Set WHATSAPP_ENABLED=true in env to turn every message on (no code change).
+  if (process.env.WHATSAPP_ENABLED !== 'true') return;
+
   const res = await fetch(
     `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`,
     {
@@ -82,7 +86,7 @@ export async function sendBookingConfirmed(
   classDate: string,
   classTime: string
 ) {
-  await sendTemplate(phone, 'hello_world', []);
+  await sendTemplate(phone, 'azdah_booking_confirmed', [memberName, className, classDate, classTime]);
 }
 
 // ─── Send expiry reminder to member ──────────────────────────

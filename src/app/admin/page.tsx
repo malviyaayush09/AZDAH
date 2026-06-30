@@ -42,7 +42,14 @@ type AuditLog = {
   details: Record<string, unknown> | null; created_at: string;
 };
 
-type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit';
+type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit' | 'templates';
+
+type ClassTemplate = {
+  id: string; title: string; instructor_name: string | null;
+  day_of_week: number; start_time: string; end_time: string;
+  capacity: number; category: string; notes: string | null;
+  is_active: boolean; created_at: string;
+};
 
 const DARK = '#0D0B08';
 const CARD = '#1A1410';
@@ -123,6 +130,14 @@ export default function AdminPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [revView, setRevView] = useState<'monthly' | 'yearly'>('monthly');
+  const [templates, setTemplates] = useState<ClassTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({ title: '', instructor_name: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateDeleteBusy, setTemplateDeleteBusy] = useState<string | null>(null);
+  const [genCycle, setGenCycle] = useState({ startDate: '', endDate: '' });
+  const [genCycleSaving, setGenCycleSaving] = useState(false);
+  const [genCycleResult, setGenCycleResult] = useState<{ created: number; skipped: number } | null>(null);
   type OverviewStats = {
     today: { classes: number; expected_members: number; attended: number };
     expiring_this_week: { id: string; name: string; phone: string; plan_name: string; plan_end: string; days_remaining: number }[];
@@ -274,12 +289,19 @@ export default function AdminPage() {
   }
 
   async function resetPassword(memberId: string) {
-    if (!confirm('Reset this member\'s password and send via WhatsApp?')) return;
+    if (!confirm('Reset this member\'s password? You will see the new password to share with them.')) return;
     setMemberActionBusy(memberId + '-reset');
     const res = await fetch(`/api/admin/members/${memberId}/reset-password`, { method: 'POST' });
     const data = await res.json();
     setMemberActionBusy(null);
-    setMsg(data.ok ? { text: 'Password reset — new password sent via WhatsApp', ok: true } : { text: data.error || 'Failed', ok: false });
+    if (data.ok) {
+      // Show the password in a blocking alert so the admin can copy and relay it
+      // (WhatsApp delivery is best-effort and may not be live yet).
+      window.alert(`New password for ${data.name} (+${data.phone}):\n\n${data.password}\n\nShare this with the member. They'll be asked to change it on first login.`);
+      setMsg({ text: `Password reset for ${data.name} — new password: ${data.password}`, ok: true });
+    } else {
+      setMsg({ text: data.error || 'Failed', ok: false });
+    }
   }
 
   async function submitRefund() {
@@ -345,6 +367,57 @@ export default function AdminPage() {
 
   function exportRevenueCSV() {
     window.open('/api/admin/export/revenue', '_blank');
+  }
+
+  async function loadTemplates() {
+    if (templates.length) return;
+    setTemplatesLoading(true);
+    const res = await fetch('/api/admin/class-templates');
+    const data = await res.json();
+    setTemplates(data.templates || []);
+    setTemplatesLoading(false);
+  }
+
+  async function createTemplate(e: React.FormEvent) {
+    e.preventDefault(); setTemplateSaving(true); setMsg(null);
+    const res = await fetch('/api/admin/class-templates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newTemplate, day_of_week: parseInt(newTemplate.day_of_week), capacity: parseInt(newTemplate.capacity) }),
+    });
+    const data = await res.json();
+    setTemplateSaving(false);
+    if (data.success) {
+      setMsg({ text: 'Template created!', ok: true });
+      setTemplates([]); loadTemplates();
+      setNewTemplate({ title: '', instructor_name: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
+    } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function deleteTemplate(id: string) {
+    if (!confirm('Delete this template? This will not affect already-created classes.')) return;
+    setTemplateDeleteBusy(id);
+    const res = await fetch(`/api/admin/class-templates/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    setTemplateDeleteBusy(null);
+    if (data.success) {
+      setTemplates(prev => prev.filter(t => t.id !== id));
+      setMsg({ text: 'Template deleted', ok: true });
+    } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function generateCycleAction(e: React.FormEvent) {
+    e.preventDefault(); setGenCycleSaving(true); setGenCycleResult(null); setMsg(null);
+    const res = await fetch('/api/admin/generate-cycle', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(genCycle),
+    });
+    const data = await res.json();
+    setGenCycleSaving(false);
+    if (data.success) {
+      setGenCycleResult({ created: data.created, skipped: data.skipped });
+      setMsg({ text: `Done — ${data.created} classes created, ${data.skipped} already existed.`, ok: true });
+      fetchAll();
+    } else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
   async function loadPromoCodes() {
@@ -557,8 +630,9 @@ export default function AdminPage() {
 
         {/* ── Tab bar ── */}
         <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, marginBottom:20 }}>
-          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['broadcast','Broadcast'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
-            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); }}
+          {/* 'Broadcast' tab hidden until WhatsApp is live — it would report success while sending nothing. Re-add ['broadcast','Broadcast'] when WHATSAPP_ENABLED=true. */}
+          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['templates','Templates'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
+            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); if(k==='templates')loadTemplates(); }}
               style={{ padding:'13px 20px', fontSize:13, fontWeight:500, color: tab===k ? ORANGE : MUTED, borderBottom: tab===k ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:-1 }}>
               {l}
             </button>
@@ -1052,6 +1126,140 @@ export default function AdminPage() {
         )}
 
         {/* ════════════════ AUDIT LOG TAB ════════════════ */}
+        {/* ════ TEMPLATES TAB ════ */}
+        {tab === 'templates' && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, maxWidth:1100 }}>
+            {/* Left — template list */}
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:4 }}>Weekly Templates</div>
+              <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>Each template generates one class per matching day when you run Generate Cycle.</div>
+              {templatesLoading ? (
+                <div style={{ color:MUTED, fontSize:13 }}>Loading…</div>
+              ) : templates.length === 0 ? (
+                <div style={{ color:MUTED, fontSize:13 }}>No templates yet. Add one using the form →</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                  {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((day, dow) => {
+                    const dayTemplates = templates.filter(t => t.day_of_week === dow);
+                    if (!dayTemplates.length) return null;
+                    return (
+                      <div key={dow}>
+                        <div style={{ fontSize:10, color:ORANGE, letterSpacing:'.14em', textTransform:'uppercase', fontWeight:700, marginBottom:4, marginTop:8 }}>{day}</div>
+                        {dayTemplates.map(t => (
+                          <div key={t.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:6, padding:'9px 12px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:3 }}>
+                            <div>
+                              <span style={{ fontSize:12, fontWeight:600, color:CREAM }}>{t.title}</span>
+                              {t.instructor_name && <span style={{ fontSize:11, color:MUTED, marginLeft:8 }}>{t.instructor_name}</span>}
+                              <span style={{ fontSize:11, color:MUTED, marginLeft:8 }}>{t.start_time.slice(0,5)}–{t.end_time.slice(0,5)}</span>
+                              <span style={{ fontSize:10, color:MUTED, marginLeft:8 }}>cap:{t.capacity}</span>
+                            </div>
+                            <button onClick={() => deleteTemplate(t.id)} disabled={templateDeleteBusy === t.id}
+                              style={{ fontSize:11, color:'#f87171', background:'none', border:'1px solid rgba(248,113,113,.25)', borderRadius:4, padding:'3px 8px', cursor:'pointer' }}>
+                              {templateDeleteBusy === t.id ? '…' : 'Delete'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Generate Cycle */}
+              <div style={{ marginTop:28, background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:'18px 16px' }}>
+                <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:4 }}>Generate Cycle</div>
+                <div style={{ fontSize:12, color:MUTED, marginBottom:14 }}>Creates all classes from active templates for a date range. Skips any that already exist.</div>
+                <form onSubmit={generateCycleAction} style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                    <div>
+                      <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Start date</label>
+                      <input type="date" required value={genCycle.startDate} onChange={e => setGenCycle(p => ({ ...p, startDate: e.target.value }))}
+                        style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:12 }} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>End date</label>
+                      <input type="date" required value={genCycle.endDate} onChange={e => setGenCycle(p => ({ ...p, endDate: e.target.value }))}
+                        style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:12 }} />
+                    </div>
+                  </div>
+                  <button type="submit" disabled={genCycleSaving}
+                    style={{ background:ORANGE, border:'none', color:'#fff', borderRadius:6, padding:'9px', fontSize:13, fontWeight:600, cursor:'pointer', opacity: genCycleSaving ? .6 : 1 }}>
+                    {genCycleSaving ? 'Generating…' : '⚡ Generate Classes'}
+                  </button>
+                  {genCycleResult && (
+                    <div style={{ fontSize:12, color:'#4ade80', background:'rgba(74,222,128,.08)', border:'1px solid rgba(74,222,128,.2)', borderRadius:6, padding:'8px 12px' }}>
+                      ✓ {genCycleResult.created} classes created{genCycleResult.skipped > 0 ? `, ${genCycleResult.skipped} already existed` : ''}
+                    </div>
+                  )}
+                </form>
+              </div>
+            </div>
+
+            {/* Right — add template form */}
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>Add Template</div>
+              <form onSubmit={createTemplate} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                {[
+                  { label:'Class title', key:'title', type:'text', placeholder:'e.g. Pole Princess' },
+                  { label:'Instructor', key:'instructor_name', type:'text', placeholder:'e.g. Azdah (optional)' },
+                ].map(({ label, key, type, placeholder }) => (
+                  <div key={key}>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>{label}</label>
+                    <input type={type} required={key==='title'} placeholder={placeholder}
+                      value={newTemplate[key as keyof typeof newTemplate]}
+                      onChange={e => setNewTemplate(p => ({ ...p, [key]: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Day of week</label>
+                  <select value={newTemplate.day_of_week} onChange={e => setNewTemplate(p => ({ ...p, day_of_week: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }}>
+                    {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d,i) => (
+                      <option key={i} value={i}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Start time</label>
+                    <input type="time" required value={newTemplate.start_time} onChange={e => setNewTemplate(p => ({ ...p, start_time: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>End time</label>
+                    <input type="time" required value={newTemplate.end_time} onChange={e => setNewTemplate(p => ({ ...p, end_time: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Capacity</label>
+                    <input type="number" required min="1" max="100" value={newTemplate.capacity} onChange={e => setNewTemplate(p => ({ ...p, capacity: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Category</label>
+                    <select value={newTemplate.category} onChange={e => setNewTemplate(p => ({ ...p, category: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }}>
+                      <option value="pole_regular">Pole (Regular)</option>
+                      <option value="pole_nimisha">Pole (Nimisha)</option>
+                      <option value="strength">Strength</option>
+                      <option value="mobility">Mobility</option>
+                      <option value="self_practice">Self Practice</option>
+                    </select>
+                  </div>
+                </div>
+                <button type="submit" disabled={templateSaving}
+                  style={{ background:ORANGE, border:'none', color:'#fff', borderRadius:6, padding:'10px', fontSize:13, fontWeight:600, cursor:'pointer', opacity: templateSaving ? .6 : 1 }}>
+                  {templateSaving ? 'Saving…' : 'Add Template'}
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ════ AUDIT TAB ════ */}
         {tab === 'audit' && (
           <div style={{ maxWidth:860 }}>
             {auditLoading ? <div style={{ color:MUTED, fontSize:13 }}>Loading…</div> : auditLogs.length === 0 ? <div style={{ color:MUTED, fontSize:13 }}>No audit entries yet.</div> : (

@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const db = getServiceClient();
   const { data: member } = await db
     .from('members')
-    .select('id, name, phone, plan_id, plan_start, plan_end, reschedule_used_this_month, reschedule_reset_date, must_change_password, is_frozen, membership_plans(name)')
+    .select('id, name, phone, plan_id, plan_start, plan_end, reschedule_used_this_month, reschedule_reset_date, must_change_password, is_frozen, membership_plans(name, classes_included)')
     .eq('id', memberId)
     .single();
 
@@ -36,7 +36,21 @@ export async function GET(req: NextRequest) {
   }
 
   const plans = member.membership_plans;
-  const planName = (Array.isArray(plans) ? plans[0] : plans as { name: string } | null)?.name || 'Unknown Plan';
+  const planInfo = (Array.isArray(plans) ? plans[0] : plans as { name: string; classes_included: number | null } | null);
+  const planName = planInfo?.name || 'Unknown Plan';
+  const classesIncluded = planInfo?.classes_included ?? null;
+
+  // Count used classes in current pack (confirmed + attended since plan_start)
+  let classesRemaining: number | null = null;
+  if (classesIncluded !== null && member.plan_start) {
+    const { count: usedCount } = await db
+      .from('bookings')
+      .select('*', { count: 'exact', head: true })
+      .eq('member_id', memberId)
+      .in('status', ['confirmed', 'attended'])
+      .gte('created_at', member.plan_start + 'T00:00:00Z');
+    classesRemaining = Math.max(0, classesIncluded - (usedCount || 0));
+  }
 
   return NextResponse.json({
     member: {
@@ -47,6 +61,8 @@ export async function GET(req: NextRequest) {
       plan_start: member.plan_start,
       plan_end: member.plan_end,
       days_remaining: daysRemaining,
+      classes_included: classesIncluded,
+      classes_remaining: classesRemaining,
       reschedule_used: rescheduleUsed,
       must_change_password: member.must_change_password ?? false,
       is_frozen: member.is_frozen ?? false,

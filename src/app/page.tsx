@@ -148,22 +148,22 @@ const FAQS = [
   { q: 'Is the payment secure?', a: 'All payments are processed through Razorpay with 256-bit SSL encryption. We never store your card details.' },
 ];
 
-// ─── TESTIMONIALS ────────────────────────────────────────────
+// ─── TESTIMONIALS (real Google reviews) ──────────────────────
 const TESTIMONIALS = [
   {
-    quote: 'AZDAH changed how I move through the world. The aerial classes gave me strength I never thought possible.',
-    name: 'Priya S.',
-    role: 'Aerial Silks · 8 months',
+    quote: "This is a great place to learn pole from. Azdah is very encouraging and great at teaching. Everything I know in pole is because of her. She's helped me gain strength, flexibility and confidence… The studio is extremely well maintained. It's clean, has AC and really good quality equipment. I highly recommend learning from here!",
+    name: 'Nimisha Sharma',
+    role: 'Google review',
   },
   {
-    quote: 'The coaches here genuinely care. Not just about your fitness, but about your relationship with your body.',
-    name: 'Rahul M.',
-    role: 'Vertical Fitness · 1 year',
+    quote: "Training with Azdah has been nothing short of amazing. Exactly a year apart, I achieved my split and then my Ayesha — something I never thought possible when I first started. Her patience, encouragement, and incredible teaching skills make every class empowering. Couldn't have asked for a better pole teacher!",
+    name: 'Rakhi Ranjan',
+    role: 'Google review',
   },
   {
-    quote: "I've tried many studios in Bangalore. Nothing comes close to the depth of practice you find at AZDAH.",
-    name: 'Ananya K.',
-    role: 'Holistic & Breathwork · 6 months',
+    quote: "I've been taking classes with Azdah for a while now, and she's truly the best. Every session feels like a mix of strength, grace, and fun. She's incredibly patient and attentive, always making sure we understand the moves and can do them safely… Whether you're a beginner or have been at it for years, she knows exactly how to challenge you and help you grow.",
+    name: 'Sneh Ratna',
+    role: 'Google review',
   },
 ];
 
@@ -172,6 +172,7 @@ export default function HomePage() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [planTab, setPlanTab] = useState<'pole' | 'offpole' | 'self' | 'combo'>('pole');
 
   // checkout
   const [selectedPlan, setSelectedPlan] = useState<MembershipPlan | null>(null);
@@ -558,14 +559,23 @@ export default function HomePage() {
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <p style={{ color: 'rgba(21,17,13,0.45)', fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>Members speak</p>
           <h2 style={{ fontFamily: SERIF, fontSize: 42, fontWeight: 800, color: DARK, margin: '0 0 60px', lineHeight: 1.1 }}>What the practice gives.</h2>
-          <div className="test-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+          <div className="test-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, alignItems: 'start' }}>
             {TESTIMONIALS.map((t) => (
               <div key={t.name} style={{ background: '#EDE2CF', padding: '36px 32px', border: '1px solid ' + TAN2, borderRadius: 2 }}>
-                <div style={{ color: ORANGE, fontSize: 32, lineHeight: 1, marginBottom: 18, fontFamily: SERIF }}>&#8220;</div>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 18 }}>
+                  {[0,1,2,3,4].map((i) => (
+                    <svg key={i} width="16" height="16" viewBox="0 0 24 24" fill="#F5A623" aria-hidden="true">
+                      <path d="M12 2l2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l7.1-1.01L12 2z" />
+                    </svg>
+                  ))}
+                </div>
                 <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 16, lineHeight: 1.65, color: DARK, margin: '0 0 24px' }}>{t.quote}</p>
-                <div style={{ borderTop: '1px solid ' + TAN2, paddingTop: 20 }}>
+                <div style={{ borderTop: '1px solid ' + TAN2, paddingTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                   <div style={{ fontWeight: 700, fontSize: 14, color: DARK }}>{t.name}</div>
-                  <div style={{ color: 'rgba(21,17,13,0.5)', fontSize: 12, letterSpacing: '0.04em', marginTop: 3 }}>{t.role}</div>
+                  <div style={{ color: 'rgba(21,17,13,0.5)', fontSize: 11, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0012 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 010-4.2V7.06H2.18a11 11 0 000 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1A11 11 0 002.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z"/></svg>
+                    {t.role}
+                  </div>
                 </div>
               </div>
             ))}
@@ -600,78 +610,138 @@ export default function HomePage() {
       {/* ── PRICING ── */}
       <section id="membership" style={{ background: DARK, padding: '100px 28px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>Membership</p>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 60, flexWrap: 'wrap', gap: 20 }}>
+          <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>Memberships & Packs</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 40, flexWrap: 'wrap', gap: 20 }}>
             <h2 style={{ fontFamily: SERIF, fontSize: 48, fontWeight: 800, color: CREAM, margin: 0, lineHeight: 1.05 }}>
-              Choose your<br />commitment.
+              Choose your<br />practice.
             </h2>
             <p style={{ color: MUTED, fontSize: 15, lineHeight: 1.7, maxWidth: 340, margin: 0 }}>
-              Every plan includes full access to all 12 disciplines. No hidden fees, no limitations.
+              Class packs — buy what you need, use at your pace. No subscriptions.
             </p>
+          </div>
+
+          {/* Category tabs */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 40, flexWrap: 'wrap' }}>
+            {([
+              { key: 'pole',    label: 'Pole Classes' },
+              { key: 'offpole', label: 'Off The Pole' },
+              { key: 'self',    label: 'Self Practice' },
+              { key: 'combo',   label: 'Combos' },
+            ] as const).map(({ key, label }) => (
+              <button key={key} onClick={() => setPlanTab(key)}
+                style={{
+                  background: planTab === key ? ORANGE : 'none',
+                  border: planTab === key ? 'none' : '1px solid rgba(241,233,218,0.2)',
+                  color: planTab === key ? DARK : MUTED,
+                  fontWeight: planTab === key ? 700 : 500,
+                  fontSize: 13, letterSpacing: '0.04em',
+                  padding: '9px 20px', borderRadius: 2,
+                }}>
+                {label}
+              </button>
+            ))}
           </div>
 
           {loadingPlans ? (
             <div style={{ textAlign: 'center', color: MUTED, padding: '60px 0', fontSize: 15 }}>Loading plans...</div>
-          ) : (
-            <div className="plans-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(plans.length, 4)}, 1fr)`, gap: 16 }}>
-              {plans.map((plan) => {
-                const isPopular = plan.duration_days === 90;
-                return (
-                  <div key={plan.id} className="plan-card" style={{
-                    position: 'relative',
-                    background: isPopular ? '#231C15' : CARD,
-                    border: isPopular ? `1px solid ${ORANGE}` : '1px solid rgba(241,233,218,0.1)',
-                    borderRadius: 2,
-                    padding: '36px 28px',
-                    display: 'flex', flexDirection: 'column',
-                  }}>
-                    {isPopular && (
-                      <div style={{
-                        position: 'absolute', top: -1, left: 0, right: 0,
-                        background: ORANGE, textAlign: 'center',
-                        fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase',
-                        color: DARK, padding: '5px 0',
-                      }}>Most chosen</div>
-                    )}
-                    {isPopular && <div style={{ marginTop: 18 }} />}
+          ) : (() => {
+            const POPULAR = ['Pole · 4 Classes', 'Self Practice · 8 Sessions', 'Mobility · 8 Sessions', 'Combo · Pole + Practice'];
+            const catMap: Record<typeof planTab, string[]> = {
+              pole:    ['pole_regular', 'pole_nimisha'],
+              offpole: ['strength', 'mobility'],
+              self:    ['self_practice'],
+              combo:   ['combo'],
+            };
+            const filtered = plans.filter(p => catMap[planTab].includes(p.plan_category));
+            const regularPlans = filtered.filter(p => p.plan_category === 'pole_regular');
+            const nimishaPlans = filtered.filter(p => p.plan_category === 'pole_nimisha');
+            const otherPlans   = filtered.filter(p => !['pole_regular','pole_nimisha'].includes(p.plan_category));
 
-                    <div style={{ marginBottom: 8 }}>
-                      <div style={{ color: MUTED, fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 6 }}>{plan.duration_days} days</div>
-                      <div style={{ fontFamily: SERIF, fontWeight: 800, fontSize: 22, color: CREAM }}>{plan.name}</div>
-                    </div>
-
-                    <div style={{ margin: '20px 0 24px', paddingBottom: 20, borderBottom: '1px solid rgba(241,233,218,0.1)' }}>
-                      <div style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 800, color: isPopular ? ORANGE : CREAM, lineHeight: 1 }}>
-                        {formatPrice(plan.price_paise)}
-                      </div>
-                      <div style={{ color: MUTED, fontSize: 12.5, marginTop: 5 }}>{perMonth(plan)} / month</div>
-                    </div>
-
-                    <ul style={{ flex: 1, listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {(plan.features || []).map((f: string, j: number) => (
-                        <li key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: MUTED }}>
-                          <span style={{ color: ORANGE, marginTop: 1, flexShrink: 0, fontSize: 11 }}>✦</span>
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-
-                    <button onClick={() => openCheckout(plan)} className={isPopular ? 'btn-orange' : 'btn-outline'} style={{
-                      width: '100%', padding: '13px 0', borderRadius: 2,
-                      background: isPopular ? ORANGE : 'none',
-                      border: isPopular ? 'none' : `1px solid rgba(248,52,51,0.5)`,
-                      color: isPopular ? DARK : ORANGE,
-                      fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase',
-                    }}>
-                      Join now
-                    </button>
+            const PlanCard = ({ plan }: { plan: MembershipPlan }) => {
+              const isPopular = POPULAR.includes(plan.name);
+              const classLabel = plan.classes_included
+                ? `${plan.classes_included} class${plan.classes_included !== 1 ? 'es' : ''}`
+                : `${plan.duration_days}-day pack`;
+              const pricePerUnit = plan.classes_included
+                ? `₹${Math.round(plan.price_paise / 100 / plan.classes_included).toLocaleString('en-IN')} / class`
+                : `${perMonth(plan)} / month`;
+              return (
+                <div className="plan-card" style={{
+                  position: 'relative', background: isPopular ? '#231C15' : CARD,
+                  border: isPopular ? `1px solid ${ORANGE}` : '1px solid rgba(241,233,218,0.1)',
+                  borderRadius: 2, padding: '36px 28px', display: 'flex', flexDirection: 'column',
+                }}>
+                  {isPopular && (
+                    <div style={{ position: 'absolute', top: -1, left: 0, right: 0, background: ORANGE, textAlign: 'center', fontSize: 10, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase', color: DARK, padding: '5px 0' }}>Best value</div>
+                  )}
+                  {isPopular && <div style={{ marginTop: 18 }} />}
+                  <div style={{ marginBottom: 8 }}>
+                    <div style={{ color: MUTED, fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', marginBottom: 6 }}>{classLabel}</div>
+                    <div style={{ fontFamily: SERIF, fontWeight: 800, fontSize: 20, color: CREAM, lineHeight: 1.2 }}>{plan.name}</div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <div style={{ margin: '20px 0 24px', paddingBottom: 20, borderBottom: '1px solid rgba(241,233,218,0.1)' }}>
+                    <div style={{ fontFamily: SERIF, fontSize: 38, fontWeight: 800, color: isPopular ? ORANGE : CREAM, lineHeight: 1 }}>
+                      {formatPrice(plan.price_paise)}
+                    </div>
+                    <div style={{ color: MUTED, fontSize: 12.5, marginTop: 5 }}>{pricePerUnit}</div>
+                  </div>
+                  <ul style={{ flex: 1, listStyle: 'none', padding: 0, margin: '0 0 28px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {(plan.features || []).map((f: string, j: number) => (
+                      <li key={j} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 13, color: MUTED }}>
+                        <span style={{ color: ORANGE, marginTop: 1, flexShrink: 0, fontSize: 11 }}>✦</span>{f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button onClick={() => openCheckout(plan)} className={isPopular ? 'btn-orange' : 'btn-outline'} style={{
+                    width: '100%', padding: '13px 0', borderRadius: 2,
+                    background: isPopular ? ORANGE : 'none',
+                    border: isPopular ? 'none' : `1px solid rgba(248,52,51,0.5)`,
+                    color: isPopular ? DARK : ORANGE,
+                    fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}>Book now</button>
+                </div>
+              );
+            };
+
+            return (
+              <>
+                {/* Pole tab: regular + Nimisha sub-section */}
+                {planTab === 'pole' && (
+                  <>
+                    <div className="plans-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(regularPlans.length, 4)}, 1fr)`, gap: 16 }}>
+                      {regularPlans.map(p => <PlanCard key={p.id} plan={p} />)}
+                    </div>
+                    {nimishaPlans.length > 0 && (
+                      <div style={{ marginTop: 40 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+                          <div style={{ flex: 1, height: 1, background: 'rgba(241,233,218,0.1)' }} />
+                          <span style={{ fontSize: 12, color: MUTED, letterSpacing: '0.1em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                            With Nimisha · Junior instructor · 4–11% off
+                          </span>
+                          <div style={{ flex: 1, height: 1, background: 'rgba(241,233,218,0.1)' }} />
+                        </div>
+                        <div className="plans-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(nimishaPlans.length, 4)}, 1fr)`, gap: 16 }}>
+                          {nimishaPlans.map(p => <PlanCard key={p.id} plan={p} />)}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+                {/* All other tabs */}
+                {planTab !== 'pole' && (
+                  <div className="plans-grid" style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(Math.max(otherPlans.length, 1), 4)}, 1fr)`, gap: 16 }}>
+                    {otherPlans.map(p => <PlanCard key={p.id} plan={p} />)}
+                  </div>
+                )}
+                {filtered.length === 0 && !loadingPlans && (
+                  <div style={{ textAlign: 'center', color: MUTED, padding: '60px 0', fontSize: 15 }}>No plans available in this category yet.</div>
+                )}
+              </>
+            );
+          })()}
+
           <p style={{ color: FAINT, fontSize: 12, textAlign: 'center', marginTop: 32 }}>
-            Secured by Razorpay · 100% safe payment · No auto-renewal
+            Secured by Razorpay · 100% safe payment · No auto-renewal · GST included where shown
           </p>
         </div>
       </section>
@@ -698,18 +768,6 @@ export default function HomePage() {
               );
             })}
           </div>
-          {/* Trial class CTA */}
-          <div style={{ marginTop: 48, background: CARD, border: '1px solid rgba(248,52,51,0.2)', borderRadius: 8, padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
-            <div>
-              <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: CREAM, marginBottom: 6 }}>Try a free class first</div>
-              <div style={{ color: MUTED, fontSize: 14 }}>No commitment. Come in, move, and decide after.</div>
-            </div>
-            <a href="https://wa.me/918588056122?text=Hi%2C%20I%27d%20like%20to%20book%20a%20free%20trial%20class%20at%20AZDAH!" target="_blank" rel="noopener noreferrer"
-              style={{ background: ORANGE, color: '#fff', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '13px 26px', borderRadius: 2, textDecoration: 'none', flexShrink: 0 }}>
-              Book Free Trial →
-            </a>
-          </div>
-
           <p style={{ color: MUTED, fontSize: 14, textAlign: 'center', marginTop: 32 }}>
             Still have questions?{' '}
             <a href="https://wa.me/918588056122" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, textDecoration: 'underline' }}>
@@ -900,7 +958,7 @@ export default function HomePage() {
                         <span style={{ color: ORANGE, fontWeight: 700, letterSpacing: '0.05em' }}>{memberCreds.password}</span>
                       </div>
                     </div>
-                    <p style={{ color: FAINT, fontSize: 11, marginTop: 10, marginBottom: 0 }}>Screenshot this — credentials will also be sent to your WhatsApp.</p>
+                    <p style={{ color: ORANGE, fontSize: 11, marginTop: 10, marginBottom: 0, fontWeight: 600 }}>⚠ Screenshot or save these now — you&apos;ll need them to log in.</p>
                   </div>
                 )}
                 <Link href="/login" onClick={() => setSelectedPlan(null)} style={{
@@ -915,8 +973,12 @@ export default function HomePage() {
                 {/* Plan summary */}
                 <div style={{ background: DARK, border: '1px solid rgba(241,233,218,0.08)', borderRadius: 2, padding: '16px 18px', marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 16, color: CREAM }}>{selectedPlan.name} Membership</div>
-                    <div style={{ color: MUTED, fontSize: 12, marginTop: 3 }}>{selectedPlan.duration_days} days · {perMonth(selectedPlan)}/mo</div>
+                    <div style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 16, color: CREAM }}>{selectedPlan.name}</div>
+                    <div style={{ color: MUTED, fontSize: 12, marginTop: 3 }}>
+                      {selectedPlan.classes_included
+                        ? `${selectedPlan.classes_included} class${selectedPlan.classes_included !== 1 ? 'es' : ''} · valid ${selectedPlan.duration_days} days · one-time`
+                        : `${selectedPlan.duration_days} days · one-time`}
+                    </div>
                   </div>
                   <div style={{ fontFamily: SERIF, fontSize: 22, fontWeight: 800, color: ORANGE }}>{formatPrice(selectedPlan.price_paise)}</div>
                 </div>
@@ -934,7 +996,7 @@ export default function HomePage() {
                       <input required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="9876543210" maxLength={10} inputMode="numeric"
                         style={{ flex: 1, background: DARK, border: '1px solid rgba(241,233,218,0.14)', borderRadius: '0 2px 2px 0', padding: '12px 14px', color: CREAM, fontSize: 14, outline: 'none', minWidth: 0 }} />
                     </div>
-                    <p style={{ color: FAINT, fontSize: 11, marginTop: 5 }}>Login credentials will be sent to this number</p>
+                    <p style={{ color: FAINT, fontSize: 11, marginTop: 5 }}>Your login credentials will be shown on the next screen — save them.</p>
                   </div>
                   <div>
                     <label style={{ display: 'block', color: MUTED, fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 7 }}>Email <span style={{ opacity: 0.5 }}>(optional)</span></label>
