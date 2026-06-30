@@ -90,7 +90,7 @@ export default function TermsPage() {
           },
           {
             title: '12. Contact',
-            body: `Questions about these terms?\nEmail: hello@azdahfit.in\nWhatsApp: +91 99999 99999\nAddress: 549/3, 9th A Main, Indiranagar, Bangalore — 560038`,
+            body: `Questions about these terms?\nEmail: hello@azdahfit.in\nWhatsApp: +91 85880 56122\nAddress: 549/3, 9th A Main, Indiranagar, Bangalore — 560038`,
           },
         ].map(({ title, body }) => (
           <section key={title} style={{ marginBottom: 48 }}>

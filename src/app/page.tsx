@@ -704,7 +704,7 @@ export default function HomePage() {
               <div style={{ fontFamily: SERIF, fontSize: 20, fontWeight: 700, color: CREAM, marginBottom: 6 }}>Try a free class first</div>
               <div style={{ color: MUTED, fontSize: 14 }}>No commitment. Come in, move, and decide after.</div>
             </div>
-            <a href="https://wa.me/919999999999?text=Hi%2C%20I%27d%20like%20to%20book%20a%20free%20trial%20class%20at%20AZDAH!" target="_blank" rel="noopener noreferrer"
+            <a href="https://wa.me/918588056122?text=Hi%2C%20I%27d%20like%20to%20book%20a%20free%20trial%20class%20at%20AZDAH!" target="_blank" rel="noopener noreferrer"
               style={{ background: ORANGE, color: '#fff', fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '13px 26px', borderRadius: 2, textDecoration: 'none', flexShrink: 0 }}>
               Book Free Trial →
             </a>
@@ -712,7 +712,7 @@ export default function HomePage() {
 
           <p style={{ color: MUTED, fontSize: 14, textAlign: 'center', marginTop: 32 }}>
             Still have questions?{' '}
-            <a href="https://wa.me/919999999999" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, textDecoration: 'underline' }}>
+            <a href="https://wa.me/918588056122" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, textDecoration: 'underline' }}>
               Chat with us on WhatsApp →
             </a>
           </p>
@@ -755,7 +755,7 @@ export default function HomePage() {
               {[
                 { label: 'Studio', text: '549/3, 9th A Main, Indiranagar\nBangalore — 560038\n(Left of Copper + Clove, PCI Gases building)' },
                 { label: 'Hours', text: 'Mon – Sat: 6:00 AM – 9:00 PM\nSunday: 7:00 AM – 2:00 PM' },
-                { label: 'WhatsApp', text: '+91 99999 99999' },
+                { label: 'WhatsApp', text: '+91 85880 56122' },
                 { label: 'Email', text: 'hello@azdahfit.in' },
               ].map(({ label, text }) => (
                 <div key={label}>
@@ -830,7 +830,7 @@ export default function HomePage() {
       </footer>
 
       {/* ── FLOATING WHATSAPP ── */}
-      <a href="https://wa.me/919999999999" target="_blank" rel="noopener noreferrer"
+      <a href="https://wa.me/918588056122" target="_blank" rel="noopener noreferrer"
         title="Chat on WhatsApp"
         style={{ position: 'fixed', bottom: 28, right: 28, zIndex: 90, width: 56, height: 56, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(37,211,102,0.45)', textDecoration: 'none', animation: 'waPulse 2.5s ease-in-out infinite' }}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="white">

@@ -87,7 +87,7 @@ To exercise these rights, contact us at hello@azdahfit.in or via WhatsApp.`,
           },
           {
             title: '10. Contact',
-            body: `For privacy-related questions or requests:\nEmail: hello@azdahfit.in\nWhatsApp: +91 99999 99999\nAddress: 549/3, 9th A Main, Indiranagar, Bangalore — 560038`,
+            body: `For privacy-related questions or requests:\nEmail: hello@azdahfit.in\nWhatsApp: +91 85880 56122\nAddress: 549/3, 9th A Main, Indiranagar, Bangalore — 560038`,
           },
         ].map(({ title, body }) => (
           <section key={title} style={{ marginBottom: 48 }}>
