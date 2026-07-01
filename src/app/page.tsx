@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, type MembershipPlan } from '@/lib/supabase';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Camera, ChevronDown } from 'lucide-react';
 
 declare global {
@@ -104,46 +105,56 @@ const perMonth = (plan: MembershipPlan) => {
   return '₹' + Math.round(plan.price_paise / 100 / mo).toLocaleString('en-IN');
 };
 
-// ─── DISCIPLINES ─────────────────────────────────────────────
-const DISCIPLINES = [
+// ─── OFFERINGS ───────────────────────────────────────────────
+const OFFERINGS = [
   {
     num: '01',
-    title: 'Vertical Fitness',
-    desc: 'Pole, Aerial Hoop & Aerial Silks — build strength and grace through vertical movement.',
+    title: 'Pole Art',
+    desc: 'Choreography, flow and storytelling — find your voice and express yourself on the pole.',
   },
   {
     num: '02',
-    title: 'Core & Strength',
-    desc: 'Pilates, TRX & Calisthenics — sculpt functional strength from the inside out.',
+    title: 'Pole Fitness',
+    desc: 'Spins, climbs, inverts and tricks. Build serious strength, control and stamina.',
   },
   {
     num: '03',
-    title: 'Contemporary Movement',
-    desc: 'Dance, Hip-Hop & Yoga Flow — move freely and expressively to your own rhythm.',
+    title: 'Pole Exotic',
+    desc: 'Heels, floorwork and sensual movement. Reclaim your sensuality on your own terms.',
   },
   {
     num: '04',
-    title: 'Holistic & Breathwork',
-    desc: 'Meditation, Pranayama & Yin — restore, reset and reconnect with your body.',
+    title: 'Flexibility',
+    desc: 'Splits, backbends and mobility work that safely opens up your range over time.',
+  },
+  {
+    num: '05',
+    title: 'Strength Training',
+    desc: 'Conditioning built around one goal — the power to pull your own weight up.',
+  },
+  {
+    num: '06',
+    title: 'Mindfulness',
+    desc: 'Move with intention. Leave judgment and comparison at the door.',
   },
 ];
 
 // ─── GALLERY ─────────────────────────────────────────────────
 const GALLERY = [
-  { label: 'Aerial Silks', sub: 'Vertical Fitness', bg: 'linear-gradient(135deg,#1A1008 0%,#2A1510 100%)', accent: '#F83433' },
-  { label: 'Pole Training', sub: 'Strength & Grace', bg: 'linear-gradient(135deg,#0D1018 0%,#151825 100%)', accent: '#3b82f6' },
-  { label: 'Core Lab', sub: 'Pilates & TRX', bg: 'linear-gradient(135deg,#0A1510 0%,#122018 100%)', accent: '#10b981' },
-  { label: 'Hip-Hop Dance', sub: 'Contemporary', bg: 'linear-gradient(135deg,#15100A 0%,#22160A 100%)', accent: '#f59e0b' },
-  { label: 'Aerial Hoop', sub: 'Lyra & Flow', bg: 'linear-gradient(135deg,#130A18 0%,#1E1025 100%)', accent: '#8b5cf6' },
-  { label: 'Yin & Breathwork', sub: 'Holistic', bg: 'linear-gradient(135deg,#0A1215 0%,#101C20 100%)', accent: '#06b6d4' },
+  { label: 'Pole Art', sub: 'Flow & artistry', bg: 'linear-gradient(135deg,#1A1008 0%,#2A1510 100%)', accent: '#F83433' },
+  { label: 'Pole Fitness', sub: 'Spins & inverts', bg: 'linear-gradient(135deg,#0D1018 0%,#151825 100%)', accent: '#3b82f6' },
+  { label: 'Pole Exotic', sub: 'Heels & floorwork', bg: 'linear-gradient(135deg,#15100A 0%,#22160A 100%)', accent: '#f59e0b' },
+  { label: 'Flexibility', sub: 'Splits & backbends', bg: 'linear-gradient(135deg,#130A18 0%,#1E1025 100%)', accent: '#8b5cf6' },
+  { label: 'Strength', sub: 'Conditioning', bg: 'linear-gradient(135deg,#0A1510 0%,#122018 100%)', accent: '#10b981' },
+  { label: 'Community', sub: 'Choosing themselves', bg: 'linear-gradient(135deg,#0A1215 0%,#101C20 100%)', accent: '#06b6d4' },
 ];
 
 // ─── FAQ ──────────────────────────────────────────────────────
 const FAQS = [
-  { q: 'Do I need prior experience to join?', a: 'Not at all. Every discipline at AZDAH has beginner-friendly batches. Our coaches will assess your level on day one and guide you into the right class.' },
-  { q: 'Can I try before buying a membership?', a: 'Yes! We offer a trial class at no cost. Just tap the button below to WhatsApp us and we will slot you into the next available session before you commit.' },
-  { q: 'What does the membership include?', a: 'All plans give you full access to every discipline — Aerial, Pole, Pilates, Dance, Yoga, and more. No per-class charges, no hidden fees.' },
-  { q: 'Can I freeze or pause my membership?', a: 'Yes, members can pause their membership for up to 15 days per plan cycle. Contact us on WhatsApp at least 24 hours in advance.' },
+  { q: 'Do I need prior experience to start?', a: "None at all. Most of our students began with zero pole experience. Your coach meets you exactly where you are — it isn't important that you just started, it's important that you started at all." },
+  { q: 'Who is AZDAH for?', a: 'AZDAH is a women and queer-first pole studio — a space built to feel safe and welcoming, free of judgment or comparison. No experience required, no perfect body required.' },
+  { q: 'How do classes and packs work?', a: 'AZDAH runs on class packs, not monthly memberships. Choose a pack — Pole, Self-Practice, Mobility, Strength or a Combo — and book the sessions that suit you. No hidden fees, no auto-renewal.' },
+  { q: 'What should I wear to class?', a: 'Comfortable, fitted clothing you can move in. As you progress in pole, shorts help your skin grip the pole — but wear whatever feels good to begin. We will guide you on everything else.' },
   { q: 'What if I miss a class I booked?', a: 'You can cancel up to 2 hours before the class starts from your member dashboard. You also get one free reschedule per month.' },
   { q: 'Is the payment secure?', a: 'All payments are processed through Razorpay with 256-bit SSL encryption. We never store your card details.' },
 ];
@@ -412,68 +423,64 @@ export default function HomePage() {
           {/* Left */}
           <div className="anim-fadeup">
             <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', marginBottom: 24, fontWeight: 600 }}>
-              Bangalore&apos;s finest movement studio
+              For people who want more than a workout
             </p>
-            <h1 className="hero-h1" style={{ fontFamily: SERIF, fontSize: 78, lineHeight: 1.0, fontWeight: 900, letterSpacing: '-0.01em', color: CREAM, margin: '0 0 36px' }}>
-              MASTER<br />YOUR<br />
-              <em style={{ fontStyle: 'italic', color: ORANGE }}>BODY &amp;<br />MIND</em>
+            <h1 className="hero-h1" style={{ fontFamily: SERIF, fontSize: 66, lineHeight: 1.04, fontWeight: 900, letterSpacing: '-0.01em', color: CREAM, margin: '0 0 24px' }}>
+              Find Your<br />Power.<br />
+              <em style={{ fontStyle: 'italic', color: ORANGE }}>Move Without<br />Apology.</em>
             </h1>
-            <p style={{ color: MUTED, fontSize: 16, lineHeight: 1.7, maxWidth: 440, margin: '0 0 44px' }}>
-              Join AZDAH — where movement becomes a practice. 12 disciplines, world-class coaches, and a community that lifts you higher.
+            <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 18, lineHeight: 1.5, color: TAN, margin: '0 0 22px', maxWidth: 460 }}>
+              Pole is where femininity stops apologising and starts taking up space.
+            </p>
+            <p style={{ color: MUTED, fontSize: 15.5, lineHeight: 1.7, maxWidth: 460, margin: '0 0 40px' }}>
+              Pole isn&apos;t about performing for others — it&apos;s about coming home to yourself. At AZDAH, movement becomes confidence, sensuality becomes self-expression, and strength becomes freedom.
             </p>
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
               <button onClick={() => scrollTo('membership')} className="btn-orange"
                 style={{ background: ORANGE, border: 'none', color: DARK, fontWeight: 700, fontSize: 13.5, letterSpacing: '0.05em', textTransform: 'uppercase', padding: '15px 32px', borderRadius: 2 }}>
-                Begin your practice
+                Begin your journey
               </button>
               <button onClick={() => scrollTo('about')} className="btn-outline"
                 style={{ background: 'none', border: '1px solid rgba(241,233,218,0.3)', color: CREAM, fontWeight: 600, fontSize: 13.5, padding: '15px 28px', borderRadius: 2 }}>
-                View disciplines
+                Explore classes
               </button>
             </div>
 
-            {/* Stats */}
-            <div className="stats-row" style={{ display: 'flex', gap: 40, marginTop: 60, paddingTop: 40, borderTop: '1px solid rgba(241,233,218,0.1)' }}>
-              {[['12', 'Disciplines'], ['40+', 'Classes / week'], ['6', 'Master coaches']].map(([num, label]) => (
+            {/* Brand pillars */}
+            <div className="stats-row" style={{ display: 'flex', gap: 40, marginTop: 56, paddingTop: 40, borderTop: '1px solid rgba(241,233,218,0.1)' }}>
+              {[['Pole', 'Art · Fitness · Exotic'], ['All levels', 'Beginners welcome'], ['Zero', 'Judgment or comparison']].map(([num, label]) => (
                 <div key={label}>
-                  <div style={{ fontFamily: SERIF, fontSize: 34, fontWeight: 800, color: CREAM, lineHeight: 1 }}>{num}</div>
-                  <div style={{ color: MUTED, fontSize: 12, marginTop: 5, letterSpacing: '0.04em' }}>{label}</div>
+                  <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 800, color: CREAM, lineHeight: 1.1 }}>{num}</div>
+                  <div style={{ color: MUTED, fontSize: 12, marginTop: 6, letterSpacing: '0.04em' }}>{label}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right — visual panel */}
+          {/* Right — hero photo */}
           <div className="hero-img-col anim-fadeup-2" style={{ position: 'relative' }}>
-            <div style={{ aspectRatio: '3/4', background: 'linear-gradient(160deg,#211810 0%,#1A1410 55%,#0F0C09 100%)', borderRadius: 4, border: '1px solid rgba(241,233,218,0.06)', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '32px 28px' }}>
-              {/* Background watermark */}
-              <div style={{ position: 'absolute', right: -20, top: '50%', transform: 'translateY(-50%)', fontFamily: SERIF, fontSize: 130, fontWeight: 900, color: 'rgba(248,52,51,0.04)', letterSpacing: '.06em', lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>AZ<br/>DA<br/>H</div>
+            <div style={{ position: 'relative', aspectRatio: '3/4', borderRadius: 4, border: '1px solid rgba(241,233,218,0.06)', overflow: 'hidden', background: '#1A1410' }}>
+              <Image
+                src="/azdah-hero.jpg"
+                alt="Azdah performing pole at the studio"
+                fill
+                priority
+                sizes="(max-width: 900px) 100vw, 42vw"
+                style={{ objectFit: 'cover', objectPosition: 'center' }}
+              />
+              {/* Bottom gradient for legibility */}
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(13,11,8,0.8) 0%, rgba(13,11,8,0) 42%)', pointerEvents: 'none' }} />
 
-              {/* Top label */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* Now enrolling badge */}
+              <div style={{ position: 'absolute', top: 18, left: 18, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(13,11,8,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(241,233,218,0.12)' }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 8px rgba(74,222,128,.7)' }} />
-                <span style={{ fontSize: 11, color: MUTED, letterSpacing: '.16em', textTransform: 'uppercase' }}>Now enrolling</span>
+                <span style={{ fontSize: 11, color: CREAM, letterSpacing: '.16em', textTransform: 'uppercase' }}>Now enrolling</span>
               </div>
 
-              {/* Centre quote */}
-              <div style={{ position: 'relative' }}>
-                <div style={{ fontFamily: SERIF, fontSize: 13, color: ORANGE, letterSpacing: '.18em', textTransform: 'uppercase', marginBottom: 16 }}>Philosophy</div>
-                <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 26, lineHeight: 1.35, color: CREAM, margin: 0 }}>
-                  &ldquo;Your body is<br />capable of<br />
-                  <em style={{ color: ORANGE }}>far more.</em>&rdquo;
-                </p>
-              </div>
-
-              {/* Discipline grid */}
-              <div style={{ borderTop: '1px solid rgba(241,233,218,0.08)', paddingTop: 20 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px 24px' }}>
-                  {['Aerial Silks', 'Core Lab', 'Yoga Flow', 'Hip-Hop'].map(d => (
-                    <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 3, height: 3, borderRadius: '50%', background: ORANGE, flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, color: MUTED, letterSpacing: '0.12em', textTransform: 'uppercase' }}>{d}</span>
-                    </div>
-                  ))}
-                </div>
+              {/* Caption */}
+              <div style={{ position: 'absolute', left: 22, right: 22, bottom: 20 }}>
+                <div style={{ fontFamily: SERIF, fontSize: 24, fontWeight: 700, color: CREAM, lineHeight: 1.1 }}>Azdah</div>
+                <div style={{ color: 'rgba(245,240,232,0.8)', fontSize: 11.5, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 4 }}>Founder &amp; Head Coach</div>
               </div>
             </div>
           </div>
@@ -485,7 +492,7 @@ export default function HomePage() {
         <div style={{ display: 'flex', whiteSpace: 'nowrap', animation: 'marquee 22s linear infinite' }}>
           {[...Array(2)].map((_, i) => (
             <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
-              {['Aerial Silks', 'Pole', 'Core Lab', 'Hip-Hop', 'Pilates', 'Aerial Hoop', 'Breathwork', 'Calisthenics', 'Yin Yoga', 'Contemporary', 'TRX', 'Meditation'].map((d) => (
+              {['Pole Art', 'Pole Fitness', 'Pole Exotic', 'Flexibility', 'Strength', 'Mindfulness', 'Confidence', 'Community', 'Freedom'].map((d) => (
                 <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
                   <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 15, fontWeight: 700, color: DARK, padding: '0 20px', letterSpacing: '0.02em' }}>{d}</span>
                   <span style={{ color: 'rgba(21,17,13,0.5)', fontSize: 14 }}>✦</span>
@@ -496,26 +503,35 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* ── DISCIPLINES ── */}
+      {/* ── THE STUDIO ── */}
       <section id="about" style={{ background: CREAM, padding: '100px 28px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <p style={{ color: 'rgba(21,17,13,0.45)', fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>What we offer</p>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 60, flexWrap: 'wrap', gap: 20 }}>
-            <h2 style={{ fontFamily: SERIF, fontSize: 48, fontWeight: 800, color: DARK, margin: 0, lineHeight: 1.05, maxWidth: 440 }}>
-              12 disciplines.<br />One practice.
+          <p style={{ color: 'rgba(21,17,13,0.45)', fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>The studio</p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 56, flexWrap: 'wrap', gap: 20 }}>
+            <h2 style={{ fontFamily: SERIF, fontSize: 48, fontWeight: 800, color: DARK, margin: 0, lineHeight: 1.05, maxWidth: 460 }}>
+              Built for pole dancers.<br />Designed for movement.
             </h2>
-            <p style={{ color: 'rgba(21,17,13,0.6)', fontSize: 15, lineHeight: 1.7, maxWidth: 380, margin: 0 }}>
-              At AZDAH, we believe movement is medicine. Explore disciplines designed for every body, every goal.
+            <p style={{ color: 'rgba(21,17,13,0.6)', fontSize: 15, lineHeight: 1.7, maxWidth: 400, margin: 0 }}>
+              A welcoming space where we explore pole art, pole fitness, pole exotic, flexibility, strength training and mindfulness — without judgment or comparison.
             </p>
           </div>
-          <div className="disc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1 }}>
-            {DISCIPLINES.map((d) => (
+          <div className="disc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
+            {OFFERINGS.map((d) => (
               <div key={d.num} className="disc-card" style={{ background: 'rgba(21,17,13,0.04)', padding: '36px 28px', border: '1px solid rgba(21,17,13,0.1)' }}>
                 <div className="disc-num" style={{ fontFamily: SERIF, fontSize: 42, fontWeight: 800, color: 'rgba(21,17,13,0.15)', lineHeight: 1, marginBottom: 24, transition: 'color 0.2s' }}>{d.num}</div>
                 <h3 style={{ fontFamily: SERIF, fontWeight: 700, fontSize: 18, color: DARK, marginBottom: 12, marginTop: 0 }}>{d.title}</h3>
                 <p style={{ color: 'rgba(21,17,13,0.6)', fontSize: 13.5, lineHeight: 1.65, margin: 0 }}>{d.desc}</p>
               </div>
             ))}
+          </div>
+          {/* Closing line */}
+          <div style={{ marginTop: 48, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 24, borderTop: '1px solid rgba(21,17,13,0.12)', paddingTop: 40 }}>
+            <p style={{ color: 'rgba(21,17,13,0.75)', fontSize: 15.5, lineHeight: 1.7, margin: 0, maxWidth: 560 }}>
+              Professional equipment. Expert coaching. A community that celebrates every victory — from your first spin to your first invert.
+            </p>
+            <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 18, color: ORANGE, margin: 0, maxWidth: 340, lineHeight: 1.5 }}>
+              It isn&apos;t important that you just started — it&apos;s important that you started at all.
+            </p>
           </div>
         </div>
       </section>
@@ -525,22 +541,22 @@ export default function HomePage() {
         <div className="phil-grid" style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'center' }}>
           <div>
             <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 20 }}>Our philosophy</p>
-            <h2 style={{ fontFamily: SERIF, fontSize: 48, fontWeight: 800, color: CREAM, lineHeight: 1.08, margin: '0 0 28px' }}>
-              Movement is not a<br />habit. It is a{' '}
-              <em style={{ fontStyle: 'italic', color: ORANGE }}>way of being.</em>
+            <h2 style={{ fontFamily: SERIF, fontSize: 46, fontWeight: 800, color: CREAM, lineHeight: 1.1, margin: '0 0 28px' }}>
+              Every woman deserves<br />to feel powerful{' '}
+              <em style={{ fontStyle: 'italic', color: ORANGE }}>in her own body.</em>
             </h2>
             <p style={{ color: MUTED, fontSize: 15.5, lineHeight: 1.75, margin: '0 0 20px' }}>
-              At AZDAH, we don&apos;t just train bodies — we cultivate minds, build communities, and invite transformation through intentional movement.
+              AZDAH is a women and queer-first movement studio built on one simple belief: your body is not a problem to fix. It is a place to live.
             </p>
             <p style={{ color: MUTED, fontSize: 15.5, lineHeight: 1.75, margin: 0 }}>
-              Every class is designed to meet you where you are, challenge who you are becoming, and celebrate the strength you already carry.
+              Pole is one of the rare disciplines where strength and sensuality exist together. You don&apos;t have to choose between softness and power — you can be elegant and fierce, graceful and athletic, playful and disciplined.
             </p>
           </div>
           <div>
             {[
-              ['01', 'Intentional', 'Every session is designed with purpose — no filler, no fluff.'],
-              ['02', 'Inclusive', 'Beginners and veterans share the same floor. Your pace, your power.'],
-              ['03', 'Transformative', 'We measure progress in confidence, not just calories burned.'],
+              ['01', 'Sensual', 'Sensuality isn’t something you perform. It’s something you reclaim.'],
+              ['02', 'Strong', 'Real strength isn’t only measured by muscles — it’s being able to pull your own weight up. Pole builds full-body strength, plus the courage, consistency and confidence to try again.'],
+              ['03', 'Free', 'Move because it feels good. Dance because you can. Take up space without asking permission.'],
             ].map(([num, title, text]) => (
               <div key={title} style={{ display: 'flex', gap: 32, padding: '28px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
                 <span style={{ fontSize: 11, color: ORANGE, letterSpacing: '.08em', minWidth: 20, flexShrink: 0, paddingTop: 2 }}>{num}</span>
@@ -551,6 +567,27 @@ export default function HomePage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── ACTION PHOTO BAND ── */}
+      <section style={{ position: 'relative', height: 'min(78vh, 600px)', overflow: 'hidden', background: '#0F0C09' }}>
+        <Image
+          src="/azdah-split.jpg"
+          alt="Azdah in a full split holding the pole"
+          fill
+          sizes="100vw"
+          style={{ objectFit: 'cover', objectPosition: 'center 35%' }}
+        />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(13,11,8,0.9) 0%, rgba(13,11,8,0.45) 50%, rgba(13,11,8,0.15) 100%)', pointerEvents: 'none' }} />
+        <div style={{ position: 'relative', maxWidth: 1200, margin: '0 auto', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0 28px' }}>
+          <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 18 }}>Train with Azdah</p>
+          <h2 style={{ fontFamily: SERIF, fontSize: 46, fontWeight: 800, color: CREAM, lineHeight: 1.05, margin: 0, maxWidth: 500 }}>
+            Built on strength.<br /><em style={{ fontStyle: 'italic', color: ORANGE }}>Moved by grace.</em>
+          </h2>
+          <p style={{ color: 'rgba(245,240,232,0.75)', fontSize: 15.5, lineHeight: 1.7, maxWidth: 400, margin: '22px 0 0' }}>
+            From your first grip to your first invert — learn pole, exotic and mobility from a coach who meets you exactly where you are.
+          </p>
         </div>
       </section>
 
@@ -586,13 +623,13 @@ export default function HomePage() {
       {/* ── GALLERY ── */}
       <section style={{ background: DARK, padding: '100px 28px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>The studio</p>
+          <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 16 }}>The space</p>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 48, flexWrap: 'wrap', gap: 20 }}>
             <h2 style={{ fontFamily: SERIF, fontSize: 48, fontWeight: 800, color: CREAM, margin: 0, lineHeight: 1.05 }}>
               Where it all<br />happens.
             </h2>
             <p style={{ color: MUTED, fontSize: 14, lineHeight: 1.7, maxWidth: 340, margin: 0 }}>
-              A space designed for movement — equipped with professional-grade aerial rigs, sprung floors, and natural light.
+              A bright, welcoming space built for pole — professional poles, quality equipment and AC, kept spotlessly clean.
             </p>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gridTemplateRows: 'auto auto', gap: 4 }}>
@@ -777,25 +814,26 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── CTA BAND ── */}
-      <section style={{ background: ORANGE, padding: '72px 28px' }}>
-        <div className="cta-grid" style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', alignItems: 'center', gap: 40 }}>
-          <div>
-            <h2 style={{ fontFamily: SERIF, fontSize: 42, fontWeight: 800, color: DARK, margin: '0 0 12px', lineHeight: 1.1 }}>
-              Ready to begin?
-            </h2>
-            <p style={{ color: 'rgba(21,17,13,0.65)', fontSize: 16, lineHeight: 1.6, margin: 0 }}>
-              Join hundreds of members already training at AZDAH. Your first class could be tomorrow.
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 14, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+      {/* ── CLOSING / CTA BAND ── */}
+      <section style={{ background: ORANGE, padding: '90px 28px' }}>
+        <div style={{ maxWidth: 820, margin: '0 auto', textAlign: 'center' }}>
+          <h2 style={{ fontFamily: SERIF, fontSize: 46, fontWeight: 800, color: DARK, margin: '0 0 20px', lineHeight: 1.1 }}>
+            More than a studio.
+          </h2>
+          <p style={{ color: 'rgba(21,17,13,0.72)', fontSize: 16.5, lineHeight: 1.7, margin: '0 auto', maxWidth: 640 }}>
+            A community of people choosing themselves — coming together as a beautiful bouquet of vibrant minds and bodies. Every class is an invitation to become stronger, softer, bolder and more connected to yourself.
+          </p>
+          <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 22, color: DARK, fontWeight: 700, margin: '26px 0 38px', lineHeight: 1.45 }}>
+            No experience required. No perfect body required.<br />Just the willingness to begin.
+          </p>
+          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button onClick={() => scrollTo('membership')} style={{
-              background: DARK, border: 'none', color: CREAM, fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '14px 30px', borderRadius: 2, cursor: 'pointer',
+              background: DARK, border: 'none', color: CREAM, fontWeight: 700, fontSize: 13, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '15px 34px', borderRadius: 2, cursor: 'pointer',
             }}>
-              View membership
+              Begin your journey
             </button>
             <Link href="/login" style={{
-              background: 'none', border: '1px solid rgba(21,17,13,0.35)', color: DARK, fontWeight: 600, fontSize: 13, padding: '14px 24px', borderRadius: 2,
+              background: 'none', border: '1px solid rgba(21,17,13,0.35)', color: DARK, fontWeight: 600, fontSize: 13, padding: '15px 26px', borderRadius: 2,
             }}>
               Member login
             </Link>
@@ -859,14 +897,14 @@ export default function HomePage() {
                 <img src="/azdahlogo.png" alt="AZDAH" style={{ height: 32, width: 'auto', display: 'block', filter: 'none', opacity: 0.75 }} />
               </div>
               <p style={{ color: MUTED, fontSize: 13.5, lineHeight: 1.65, maxWidth: 280, margin: 0 }}>
-                Movement, aerial arts & holistic fitness studio. Bangalore.
+                A women & queer-first pole studio. Bangalore.
               </p>
             </div>
             <div style={{ display: 'flex', gap: 60, flexWrap: 'wrap' }}>
               <div>
                 <div style={{ color: FAINT, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 16 }}>Studio</div>
-                {['About', 'Disciplines', 'Membership'].map((link) => (
-                  <button key={link} onClick={() => scrollTo(link === 'Disciplines' ? 'about' : link.toLowerCase())} style={{ display: 'block', background: 'none', border: 'none', color: MUTED, fontSize: 13.5, marginBottom: 10, textAlign: 'left', padding: 0 }}>{link}</button>
+                {['The Studio', 'Membership', 'Contact'].map((link) => (
+                  <button key={link} onClick={() => scrollTo(link === 'The Studio' ? 'about' : link.toLowerCase())} style={{ display: 'block', background: 'none', border: 'none', color: MUTED, fontSize: 13.5, marginBottom: 10, textAlign: 'left', padding: 0 }}>{link}</button>
                 ))}
               </div>
               <div>
