@@ -59,5 +59,9 @@ export async function verifySignature(
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 
-  return computed === signature;
+  // Constant-time comparison — avoids leaking the expected HMAC via timing.
+  if (computed.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < computed.length; i++) diff |= computed.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
 }

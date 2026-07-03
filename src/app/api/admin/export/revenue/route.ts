@@ -50,8 +50,15 @@ export async function GET(req: NextRequest) {
     ];
   });
 
+  // Neutralize spreadsheet formula injection (a member's name/email could start
+  // with = + - @) before CSV-quoting.
+  const escapeCell = (v: unknown) => {
+    let s = String(v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
   const csv = [headers, ...rows]
-    .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .map(row => row.map(escapeCell).join(','))
     .join('\n');
 
   return new NextResponse(csv, {

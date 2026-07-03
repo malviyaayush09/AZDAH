@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       .from('bookings')
       .select('*', { count: 'exact', head: true })
       .eq('member_id', memberId)
-      .in('status', ['confirmed', 'attended'])
+      .eq('status', 'confirmed')
       .gte('created_at', member.plan_start + 'T00:00:00Z');
     classesRemaining = Math.max(0, classesIncluded - (usedCount || 0));
   }

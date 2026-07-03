@@ -468,19 +468,13 @@ export default function HomePage() {
                 sizes="(max-width: 900px) 100vw, 42vw"
                 style={{ objectFit: 'cover', objectPosition: 'center' }}
               />
-              {/* Bottom gradient for legibility */}
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(13,11,8,0.8) 0%, rgba(13,11,8,0) 42%)', pointerEvents: 'none' }} />
+              {/* Subtle gradient for depth */}
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(13,11,8,0.32) 0%, rgba(13,11,8,0) 38%)', pointerEvents: 'none' }} />
 
               {/* Now enrolling badge */}
               <div style={{ position: 'absolute', top: 18, left: 18, display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(13,11,8,0.55)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', padding: '7px 13px', borderRadius: 999, border: '1px solid rgba(241,233,218,0.12)' }}>
                 <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 8px rgba(74,222,128,.7)' }} />
                 <span style={{ fontSize: 11, color: CREAM, letterSpacing: '.16em', textTransform: 'uppercase' }}>Now enrolling</span>
-              </div>
-
-              {/* Caption */}
-              <div style={{ position: 'absolute', left: 22, right: 22, bottom: 20 }}>
-                <div style={{ fontFamily: SERIF, fontSize: 24, fontWeight: 700, color: CREAM, lineHeight: 1.1 }}>Azdah</div>
-                <div style={{ color: 'rgba(245,240,232,0.8)', fontSize: 11.5, letterSpacing: '.14em', textTransform: 'uppercase', marginTop: 4 }}>Founder &amp; Head Coach</div>
               </div>
             </div>
           </div>

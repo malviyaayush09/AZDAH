@@ -6,7 +6,9 @@ import { createOrder } from '@/lib/razorpay';
 import { checkRateLimit, recordRequest } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
-  const { planId, phone, name, email, promoCode } = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  const { planId, phone, name, email, promoCode } = body;
 
   if (!planId || !phone || !name) {
     return NextResponse.json({ error: 'planId, phone, and name required' }, { status: 400 });
@@ -100,10 +102,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 502 });
   }
 
-  // Increment promo uses — optimistic lock on uses_count to prevent race conditions
+  // Increment promo uses — optimistic lock on uses_count AND enforce the cap
+  // at write time so concurrent orders can't push uses_count past max_uses.
   if (validatedPromo) {
     const { data: p } = await db.from('promo_codes').select('uses_count, max_uses').eq('code', validatedPromo).single();
-    if (p) {
+    if (p && (p.max_uses === null || p.uses_count < p.max_uses)) {
       await db.from('promo_codes')
         .update({ uses_count: p.uses_count + 1 })
         .eq('code', validatedPromo)
@@ -111,13 +114,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Store pending intent in DB
+  // Store pending intent in DB — amount_paise is the server-authoritative price
+  // that verify-payment will confirm against the actual captured payment.
   await db.from('payment_intents').upsert({
     order_id: order.id,
     phone,
     name,
     email: email || null,
     plan_id: planId,
+    amount_paise: finalAmount,
     status: 'pending',
   });
 

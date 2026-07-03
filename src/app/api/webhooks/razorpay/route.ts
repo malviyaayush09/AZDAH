@@ -15,7 +15,11 @@ async function verifyWebhookSignature(body: string, signature: string): Promise<
   );
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
   const computed = Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('');
-  return computed === signature;
+  // Constant-time comparison.
+  if (computed.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < computed.length; i++) diff |= computed.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
 }
 
 export async function POST(req: NextRequest) {
@@ -56,15 +60,25 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (already) return NextResponse.json({ received: true });
 
-  // Fetch intent to get plan and member details
+  // Atomically claim the pending intent (pending -> completed) so the webhook
+  // and the verify-payment path can't both provision the same payment.
   const { data: intent } = await db
     .from('payment_intents')
-    .select('plan_id, phone, name, email')
+    .update({ status: 'completed' })
     .eq('order_id', orderId)
+    .eq('status', 'pending')
+    .select('plan_id, phone, name, email, amount_paise')
     .maybeSingle();
 
   if (!intent) {
-    console.error('Webhook: payment_intent not found for order', orderId);
+    // Already processed (verify-payment or a prior webhook) or unknown order.
+    return NextResponse.json({ received: true });
+  }
+
+  // Confirm the captured amount matches what we expected for this order.
+  if (intent.amount_paise != null && payment.amount !== intent.amount_paise) {
+    await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
+    console.error('Webhook: amount mismatch for order', orderId);
     return NextResponse.json({ received: true });
   }
 
@@ -74,7 +88,10 @@ export async function POST(req: NextRequest) {
     .eq('id', intent.plan_id)
     .single();
 
-  if (!plan) return NextResponse.json({ received: true });
+  if (!plan) {
+    await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
+    return NextResponse.json({ received: true });
+  }
 
   const startDate = new Date();
   const endDate = new Date(startDate);
@@ -106,11 +123,9 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     console.error('Webhook: member upsert failed', error);
+    await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
-
-  // Mark intent as completed
-  await db.from('payment_intents').update({ status: 'completed' }).eq('order_id', orderId);
 
   // Send WhatsApp
   Promise.all([

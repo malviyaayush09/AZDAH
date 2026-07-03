@@ -13,7 +13,9 @@ async function requireAdmin(req: NextRequest) {
 export async function POST(req: NextRequest, { params }: { params: { memberId: string } }) {
   if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { action, days } = await req.json() as { action: 'freeze' | 'unfreeze'; days?: number };
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  const { action, days } = body as { action: 'freeze' | 'unfreeze'; days?: number };
 
   const db = getServiceClient();
   const { data: member } = await db
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
     if (!days || days < 1) return NextResponse.json({ error: 'Days required to extend on unfreeze' }, { status: 400 });
 
     // Extend plan_end by the frozen duration
+    if (!member.plan_end) return NextResponse.json({ error: 'Member has no plan end date to extend' }, { status: 400 });
     const planEnd = new Date(member.plan_end + 'T00:00:00');
     planEnd.setDate(planEnd.getDate() + days);
     const newEnd = planEnd.toISOString().split('T')[0];
