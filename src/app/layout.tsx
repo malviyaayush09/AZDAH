@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Hanken_Grotesk, Bodoni_Moda } from 'next/font/google';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 // Body / UI typeface — clean grotesque (replaces Inter)
@@ -21,8 +22,8 @@ const bodoniModa = Bodoni_Moda({
 });
 
 export const metadata: Metadata = {
-  title: 'AZDAH Fitness · Bangalore',
-  description: 'Movement, aerial arts & holistic fitness studio in Bangalore. Join AZDAH.',
+  title: 'AZDAH · Pole Studio, Bangalore',
+  description: 'A women & queer-first pole studio in Bangalore — pole art, fitness, exotic, flexibility, strength & mindfulness. Find your power.',
   icons: { icon: '/icon.svg' },
 };
 
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         MozOsxFontSmoothing: 'grayscale',
       }}>
         {children}
+        <Analytics />
       </body>
     </html>
   );
