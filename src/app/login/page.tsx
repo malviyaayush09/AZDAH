@@ -26,7 +26,7 @@ export default function LoginPage() {
     const data = await res.json();
     setLoading(false);
     if (data.success) {
-      router.push(data.role === 'admin' ? '/admin' : '/dashboard');
+      router.push(data.role === 'admin' ? '/admin' : data.role === 'instructor' ? '/instructor' : '/dashboard');
     } else {
       setError(data.error || 'Invalid phone or password');
     }

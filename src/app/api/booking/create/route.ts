@@ -51,13 +51,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
   }
 
-  // Check class pack not exhausted (only if plan has a classes_included limit)
+  // Check class pack not exhausted + class tier is covered by the member's pack
   if (member.plan_id) {
     const { data: planData } = await db
       .from('membership_plans')
-      .select('classes_included')
+      .select('classes_included, allowed_categories')
       .eq('id', member.plan_id)
       .single();
+
+    // Tier gate: the class's category must be one the member's pack allows.
+    if (planData?.allowed_categories && planData.allowed_categories.length && cls.category
+        && !planData.allowed_categories.includes(cls.category)) {
+      return NextResponse.json(
+        { error: 'This class is not included in your pack. Please check the classes your pack covers.' },
+        { status: 403 }
+      );
+    }
+
     if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
       const { count: usedCount } = await db
         .from('bookings')

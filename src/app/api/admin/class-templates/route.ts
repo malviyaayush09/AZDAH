@@ -27,8 +27,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const body = await req.json();
-  const { title, instructor_name, day_of_week, start_time, end_time, capacity, category, notes } = body;
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  const { title, instructor_name, instructor_id, day_of_week, start_time, end_time, capacity, category, notes } = body;
 
   if (!title || day_of_week === undefined || day_of_week === null || !start_time || !end_time || !capacity) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest) {
     .insert({
       title: String(title).trim(),
       instructor_name: instructor_name ? String(instructor_name).trim() : null,
+      instructor_id: instructor_id || null,
       day_of_week: dow,
       start_time,
       end_time,

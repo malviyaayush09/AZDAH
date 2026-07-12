@@ -63,6 +63,28 @@ export async function POST(req: NextRequest) {
     return res;
   }
 
+  // Instructor login (checked before member — instructors aren't members)
+  const { data: instructor } = await db
+    .from('instructors')
+    .select('id, password_hash, is_active')
+    .eq('phone', phone)
+    .maybeSingle();
+  if (instructor) {
+    if (!instructor.is_active) {
+      return NextResponse.json({ error: 'Account inactive. Contact AZDAH.' }, { status: 403 });
+    }
+    const valid = await verifyPassword(password, instructor.password_hash);
+    if (!valid) {
+      await recordAttempt(db, phone, false);
+      return NextResponse.json({ error: 'Invalid phone or password' }, { status: 401 });
+    }
+    await recordAttempt(db, phone, true);
+    const token = await signSession({ role: 'instructor', instructorId: instructor.id, phone });
+    const res = NextResponse.json({ success: true, role: 'instructor' });
+    res.cookies.set('session', token, COOKIE_OPTS);
+    return res;
+  }
+
   // Member login
   const { data: member } = await db
     .from('members')

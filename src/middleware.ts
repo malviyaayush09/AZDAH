@@ -2,9 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/auth';
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/admin/:path*', '/api/member/:path*', '/api/booking/:path*', '/api/admin/:path*'],
+  matcher: [
+    '/dashboard/:path*',
+    '/admin/:path*',
+    '/instructor/:path*',
+    '/api/member/:path*',
+    '/api/booking/:path*',
+    '/api/admin/:path*',
+    '/api/instructor/:path*',
+  ],
   // /api/cron/* is excluded (protected by CRON_SECRET header, not session)
 };
+
+function homeFor(role: string) {
+  return role === 'admin' ? '/admin' : role === 'instructor' ? '/instructor' : '/dashboard';
+}
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
@@ -24,13 +36,16 @@ export async function middleware(req: NextRequest) {
 
   const { role } = session as { role: string };
 
-  // Page route protection
+  // Page route protection — send users to their own home if they stray
   if (!isApiRoute) {
     if (path.startsWith('/admin') && role !== 'admin') {
-      return NextResponse.redirect(new URL('/dashboard', req.url));
+      return NextResponse.redirect(new URL(homeFor(role), req.url));
     }
     if (path.startsWith('/dashboard') && role !== 'member') {
-      return NextResponse.redirect(new URL('/admin', req.url));
+      return NextResponse.redirect(new URL(homeFor(role), req.url));
+    }
+    if (path.startsWith('/instructor') && role !== 'instructor') {
+      return NextResponse.redirect(new URL(homeFor(role), req.url));
     }
   }
 
@@ -43,6 +58,9 @@ export async function middleware(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     if (path.startsWith('/api/booking') && role !== 'member') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+    if (path.startsWith('/api/instructor') && role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
   }

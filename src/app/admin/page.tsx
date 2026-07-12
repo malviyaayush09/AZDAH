@@ -30,6 +30,7 @@ type RevenueData = {
   monthly: { month: string; revenue: number; members: number }[];
   yearly: { year: string; revenue: number; members: number }[];
   recent: { date: string; plan: string; price_paise: number }[];
+  by_category?: { category: string; revenue: number; members: number }[];
 };
 type PromoCode = {
   id: string; code: string; discount_percent: number;
@@ -42,13 +43,17 @@ type AuditLog = {
   details: Record<string, unknown> | null; created_at: string;
 };
 
-type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit' | 'templates';
+type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit' | 'templates' | 'instructors';
 
 type ClassTemplate = {
-  id: string; title: string; instructor_name: string | null;
+  id: string; title: string; instructor_name: string | null; instructor_id: string | null;
   day_of_week: number; start_time: string; end_time: string;
   capacity: number; category: string; notes: string | null;
   is_active: boolean; created_at: string;
+};
+
+type Instructor = {
+  id: string; name: string; phone: string; is_active: boolean; created_at: string;
 };
 
 const DARK = '#0D0B08';
@@ -61,6 +66,16 @@ const SERIF = 'var(--font-bodoni), Georgia, serif';
 const FAINT = 'rgba(241,233,218,0.04)';
 
 const PALETTE = ['#F83433','#3b82f6','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16'];
+
+const CAT_LABELS: Record<string, string> = {
+  pole_regular: 'Pole (Azdah / Arti)',
+  pole_nimisha: 'Pole (Nimisha)',
+  self_practice: 'Self Practice',
+  mobility: 'Mobility',
+  strength: 'Strength',
+  combo: 'Combos',
+  other: 'Other',
+};
 
 function avatarColor(name: string) {
   let h = 0;
@@ -130,14 +145,20 @@ export default function AdminPage() {
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [revView, setRevView] = useState<'monthly' | 'yearly'>('monthly');
+  const [revCategory, setRevCategory] = useState<string>('all');
   const [templates, setTemplates] = useState<ClassTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
-  const [newTemplate, setNewTemplate] = useState({ title: '', instructor_name: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
+  const [newTemplate, setNewTemplate] = useState({ title: '', instructor_id: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDeleteBusy, setTemplateDeleteBusy] = useState<string | null>(null);
   const [genCycle, setGenCycle] = useState({ startDate: '', endDate: '' });
   const [genCycleSaving, setGenCycleSaving] = useState(false);
   const [genCycleResult, setGenCycleResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [instructorsLoading, setInstructorsLoading] = useState(false);
+  const [newInstructor, setNewInstructor] = useState({ name: '', phone: '' });
+  const [instructorSaving, setInstructorSaving] = useState(false);
+  const [instructorBusy, setInstructorBusy] = useState<string | null>(null);
   type OverviewStats = {
     today: { classes: number; expected_members: number; attended: number };
     expiring_this_week: { id: string; name: string; phone: string; plan_name: string; plan_end: string; days_remaining: number }[];
@@ -236,10 +257,10 @@ export default function AdminPage() {
     setLoadingBookings(false);
   }
 
-  async function loadRevenue() {
-    if (revenue) return;
+  async function loadRevenue(category?: string) {
     setRevLoading(true);
-    const res = await fetch('/api/admin/revenue');
+    const q = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
+    const res = await fetch('/api/admin/revenue' + q);
     const data = await res.json();
     setRevenue(data);
     setRevLoading(false);
@@ -370,6 +391,7 @@ export default function AdminPage() {
   }
 
   async function loadTemplates() {
+    if (!instructors.length) loadInstructors();
     if (templates.length) return;
     setTemplatesLoading(true);
     const res = await fetch('/api/admin/class-templates');
@@ -380,17 +402,82 @@ export default function AdminPage() {
 
   async function createTemplate(e: React.FormEvent) {
     e.preventDefault(); setTemplateSaving(true); setMsg(null);
+    const inst = instructors.find(i => i.id === newTemplate.instructor_id);
     const res = await fetch('/api/admin/class-templates', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newTemplate, day_of_week: parseInt(newTemplate.day_of_week), capacity: parseInt(newTemplate.capacity) }),
+      body: JSON.stringify({
+        ...newTemplate,
+        instructor_id: newTemplate.instructor_id || null,
+        instructor_name: inst?.name || null,
+        day_of_week: parseInt(newTemplate.day_of_week),
+        capacity: parseInt(newTemplate.capacity),
+      }),
     });
     const data = await res.json();
     setTemplateSaving(false);
     if (data.success) {
       setMsg({ text: 'Template created!', ok: true });
       setTemplates([]); loadTemplates();
-      setNewTemplate({ title: '', instructor_name: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
+      setNewTemplate({ title: '', instructor_id: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
     } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function loadInstructors() {
+    setInstructorsLoading(true);
+    const res = await fetch('/api/admin/instructors');
+    const data = await res.json();
+    setInstructors(data.instructors || []);
+    setInstructorsLoading(false);
+  }
+
+  async function createInstructor(e: React.FormEvent) {
+    e.preventDefault(); setInstructorSaving(true); setMsg(null);
+    const res = await fetch('/api/admin/instructors', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newInstructor),
+    });
+    const data = await res.json();
+    setInstructorSaving(false);
+    if (data.success) {
+      window.alert(`Instructor ${data.instructor.name} created.\n\nLogin phone: ${data.instructor.phone}\nPassword: ${data.password}\n\nShare these — they log in on the normal login page and land on their own instructor dashboard.`);
+      setMsg({ text: `Instructor ${data.instructor.name} created — password: ${data.password}`, ok: true });
+      setNewInstructor({ name: '', phone: '' });
+      loadInstructors();
+    } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function toggleInstructor(id: string, active: boolean) {
+    setInstructorBusy(id);
+    const res = await fetch(`/api/admin/instructors/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: !active }),
+    });
+    const data = await res.json();
+    setInstructorBusy(null);
+    if (data.ok) loadInstructors(); else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function resetInstructorPassword(id: string) {
+    if (!confirm("Reset this instructor's password? You'll see the new one to share.")) return;
+    setInstructorBusy(id);
+    const res = await fetch(`/api/admin/instructors/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'reset_password' }),
+    });
+    const data = await res.json();
+    setInstructorBusy(null);
+    if (data.ok) window.alert(`New password for ${data.name} (+${data.phone}):\n\n${data.password}\n\nShare it with them.`);
+    else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function deleteInstructor(id: string) {
+    if (!confirm('Remove this instructor? Their classes stay but become unassigned.')) return;
+    setInstructorBusy(id);
+    const res = await fetch(`/api/admin/instructors/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    setInstructorBusy(null);
+    if (data.ok) { setInstructors(prev => prev.filter(i => i.id !== id)); setMsg({ text: 'Instructor removed', ok: true }); }
+    else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
   async function deleteTemplate(id: string) {
@@ -631,8 +718,8 @@ export default function AdminPage() {
         {/* ── Tab bar ── */}
         <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, marginBottom:20 }}>
           {/* 'Broadcast' tab hidden until WhatsApp is live — it would report success while sending nothing. Re-add ['broadcast','Broadcast'] when WHATSAPP_ENABLED=true. */}
-          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['templates','Templates'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
-            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); if(k==='templates')loadTemplates(); }}
+          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['templates','Templates'],['instructors','Instructors'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
+            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); if(k==='templates')loadTemplates(); if(k==='instructors')loadInstructors(); }}
               style={{ padding:'13px 20px', fontSize:13, fontWeight:500, color: tab===k ? ORANGE : MUTED, borderBottom: tab===k ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:-1 }}>
               {l}
             </button>
@@ -873,7 +960,14 @@ export default function AdminPage() {
         {/* ════ REVENUE TAB ════ */}
         {tab === 'revenue' && (
           <>
-            <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:14 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14, gap:12, flexWrap:'wrap' }}>
+              <select value={revCategory} onChange={e => { setRevCategory(e.target.value); loadRevenue(e.target.value); }}
+                style={{ background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:8, fontSize:12, padding:'8px 12px', cursor:'pointer' }}>
+                <option value="all">All trainers / tiers</option>
+                {(revenue?.by_category || []).map(c => (
+                  <option key={c.category} value={c.category}>{CAT_LABELS[c.category] || c.category}</option>
+                ))}
+              </select>
               <button onClick={exportRevenueCSV} className="abtn"
                 style={{ padding:'9px 16px', background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', display:'flex', alignItems:'center', gap:6 }}>
                 <Download size={13} strokeWidth={1.5} /> Revenue CSV
@@ -900,6 +994,26 @@ export default function AdminPage() {
                     </div>
                   ))}
                 </div>
+
+                {(revenue.by_category?.length ?? 0) > 0 && (
+                  <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'18px 22px', marginBottom:24 }}>
+                    <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>Revenue by trainer / tier</div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                      {revenue.by_category!.map(c => {
+                        const max = Math.max(...revenue.by_category!.map(x => x.revenue), 1);
+                        return (
+                          <div key={c.category} style={{ display:'flex', alignItems:'center', gap:12 }}>
+                            <div style={{ width:150, fontSize:12, color:CREAM, flexShrink:0 }}>{CAT_LABELS[c.category] || c.category}</div>
+                            <div style={{ flex:1, height:8, background:'rgba(255,255,255,.05)', borderRadius:999, overflow:'hidden' }}>
+                              <div style={{ height:'100%', width:`${(c.revenue/max)*100}%`, background:ORANGE, borderRadius:999 }} />
+                            </div>
+                            <div style={{ width:120, textAlign:'right', fontSize:12, color:CREAM, flexShrink:0 }}>₹{(c.revenue/100).toLocaleString('en-IN')} <span style={{ color:MUTED }}>({c.members})</span></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {(revenue.monthly.length > 0 || revenue.yearly?.length > 0) && (
                   <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'20px 24px', marginBottom:24 }}>
@@ -1199,18 +1313,23 @@ export default function AdminPage() {
             <div>
               <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>Add Template</div>
               <form onSubmit={createTemplate} style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                {[
-                  { label:'Class title', key:'title', type:'text', placeholder:'e.g. Pole Princess' },
-                  { label:'Instructor', key:'instructor_name', type:'text', placeholder:'e.g. Azdah (optional)' },
-                ].map(({ label, key, type, placeholder }) => (
-                  <div key={key}>
-                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>{label}</label>
-                    <input type={type} required={key==='title'} placeholder={placeholder}
-                      value={newTemplate[key as keyof typeof newTemplate]}
-                      onChange={e => setNewTemplate(p => ({ ...p, [key]: e.target.value }))}
-                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
-                  </div>
-                ))}
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Class title</label>
+                  <input type="text" required placeholder="e.g. Pole Princess"
+                    value={newTemplate.title}
+                    onChange={e => setNewTemplate(p => ({ ...p, title: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Instructor</label>
+                  <select value={newTemplate.instructor_id}
+                    onChange={e => setNewTemplate(p => ({ ...p, instructor_id: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }}>
+                    <option value="">— No instructor —</option>
+                    {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                  {instructors.length === 0 && <div style={{ fontSize:10, color:MUTED, marginTop:4 }}>Create instructors in the Instructors tab first to assign them.</div>}
+                </div>
                 <div>
                   <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Day of week</label>
                   <select value={newTemplate.day_of_week} onChange={e => setNewTemplate(p => ({ ...p, day_of_week: e.target.value }))}
@@ -1254,6 +1373,60 @@ export default function AdminPage() {
                   style={{ background:ORANGE, border:'none', color:'#fff', borderRadius:6, padding:'10px', fontSize:13, fontWeight:600, cursor:'pointer', opacity: templateSaving ? .6 : 1 }}>
                   {templateSaving ? 'Saving…' : 'Add Template'}
                 </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ════ INSTRUCTORS TAB ════ */}
+        {tab === 'instructors' && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:24, maxWidth:1000 }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:4 }}>Instructors</div>
+              <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>They log in with their phone and see only their own classes, rosters and attendance.</div>
+              {instructorsLoading ? (
+                <div style={{ color:MUTED, fontSize:13 }}>Loading…</div>
+              ) : instructors.length === 0 ? (
+                <div style={{ color:MUTED, fontSize:13 }}>No instructors yet. Add one →</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+                  {instructors.map(i => (
+                    <div key={i.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:'12px 14px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                      <div>
+                        <div style={{ fontSize:13, fontWeight:600, color: i.is_active ? CREAM : MUTED }}>{i.name}{!i.is_active && <span style={{ fontSize:10, color:MUTED, marginLeft:8 }}>(inactive)</span>}</div>
+                        <div style={{ fontSize:11, color:MUTED, marginTop:2 }}>+{i.phone}</div>
+                      </div>
+                      <div style={{ display:'flex', gap:6 }}>
+                        <button onClick={() => resetInstructorPassword(i.id)} disabled={instructorBusy===i.id} style={{ fontSize:11, color:MUTED, background:'none', border:`1px solid ${BORDER}`, borderRadius:5, padding:'4px 8px', cursor:'pointer' }}>Reset PW</button>
+                        <button onClick={() => toggleInstructor(i.id, i.is_active)} disabled={instructorBusy===i.id} style={{ fontSize:11, color: i.is_active ? '#fbbf24' : '#4ade80', background:'none', border:`1px solid ${BORDER}`, borderRadius:5, padding:'4px 8px', cursor:'pointer' }}>{i.is_active ? 'Deactivate' : 'Activate'}</button>
+                        <button onClick={() => deleteInstructor(i.id)} disabled={instructorBusy===i.id} style={{ fontSize:11, color:'#f87171', background:'none', border:'1px solid rgba(248,113,113,.25)', borderRadius:5, padding:'4px 8px', cursor:'pointer' }}>Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>Add Instructor</div>
+              <form onSubmit={createInstructor} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Name</label>
+                  <input type="text" required placeholder="e.g. Nimisha" value={newInstructor.name}
+                    onChange={e => setNewInstructor(p => ({ ...p, name: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  <div style={{ fontSize:10, color:MUTED, marginTop:4 }}>Tip: match the name used on templates (e.g. &quot;Nimisha&quot;) so their existing classes auto-link.</div>
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Login phone (10-digit)</label>
+                  <input type="tel" required placeholder="9876543210" value={newInstructor.phone}
+                    onChange={e => setNewInstructor(p => ({ ...p, phone: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                </div>
+                <button type="submit" disabled={instructorSaving}
+                  style={{ background:ORANGE, border:'none', color:'#fff', borderRadius:6, padding:'10px', fontSize:13, fontWeight:600, cursor:'pointer', opacity: instructorSaving ? .6 : 1 }}>
+                  {instructorSaving ? 'Creating…' : 'Add Instructor'}
+                </button>
+                <div style={{ fontSize:11, color:MUTED }}>A password is generated and shown once — share it with them.</div>
               </form>
             </div>
           </div>

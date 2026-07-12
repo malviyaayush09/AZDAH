@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Build candidate classes for each day in range
-  type ClassRow = { title: string; trainer_name: string | null; class_date: string; start_time: string; end_time: string; capacity: number; is_cancelled: boolean };
+  type ClassRow = { title: string; trainer_name: string | null; class_date: string; start_time: string; end_time: string; capacity: number; is_cancelled: boolean; category: string | null; instructor_id: string | null };
   const candidates: ClassRow[] = [];
   const current = new Date(start);
   while (current <= end) {
@@ -57,6 +57,8 @@ export async function POST(req: NextRequest) {
           end_time: t.end_time,
           capacity: t.capacity,
           is_cancelled: false,
+          category: t.category ?? null,
+          instructor_id: t.instructor_id ?? null,
         });
       }
     }

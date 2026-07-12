@@ -14,7 +14,7 @@ type MemberInfo = {
 type ClassSlot = {
   id: string; title: string; trainer_name: string | null;
   class_date: string; start_time: string; end_time: string;
-  capacity: number; booked_count: number;
+  is_full: boolean;
   my_booking_id: string | null; my_booking_status: string | null;
   on_waitlist?: boolean;
 };
@@ -502,9 +502,7 @@ export default function DashboardPage() {
                   <div style={{display:'flex',flexDirection:'column',gap:10}}>
                     {dayClasses.map(cls=>{
                       const isBooked=cls.my_booking_status==='confirmed';
-                      const spotsLeft=cls.capacity-cls.booked_count;
-                      const isFull=spotsLeft<=0&&!isBooked;
-                      const fillPct=(cls.booked_count/cls.capacity)*100;
+                      const isFull=cls.is_full&&!isBooked;
                       const isReschedTarget=rescheduleMode!==null;
                       const hour=parseInt(cls.start_time.split(':')[0]);
                       const ampm=hour>=12?'PM':'AM';
@@ -524,12 +522,6 @@ export default function DashboardPage() {
                               {cls.on_waitlist&&(()=>{const wp=waitlistPos.find(w=>w.classId===cls.id);return(<span style={{fontSize:10,background:'rgba(251,191,36,.12)',color:'#fbbf24',border:'1px solid rgba(251,191,36,.28)',padding:'2px 8px',borderRadius:999}}>{wp?`Waitlist #${wp.position} of ${wp.total}`:'On Waitlist'}</span>);})()}
                             </div>
                             <div style={{fontSize:12,color:MUTED}}>{fmtTime(cls.start_time)} – {fmtTime(cls.end_time)}{cls.trainer_name&&<span style={{color:ORANGE,marginLeft:6}}>· {cls.trainer_name}</span>}</div>
-                            <div style={{marginTop:8,display:'flex',alignItems:'center',gap:8}}>
-                              <div style={{width:80,height:3,background:'rgba(255,255,255,.05)',borderRadius:999,overflow:'hidden'}}>
-                                <div style={{height:'100%',width:`${fillPct}%`,background:isFull?'#f87171':fillPct>75?'#fbbf24':ORANGE,borderRadius:999}} />
-                              </div>
-                              <span style={{fontSize:11,color:isFull?'#f87171':spotsLeft<=3?'#fbbf24':MUTED}}>{isFull?'Full':`${spotsLeft} spot${spotsLeft!==1?'s':''} left`}</span>
-                            </div>
                           </div>
                           {isReschedTarget?(
                             !isBooked&&!isFull?(
