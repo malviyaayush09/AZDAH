@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     .update({ status: 'completed' })
     .eq('order_id', orderId)
     .eq('status', 'pending')
-    .select('plan_id, phone, name, email, amount_paise')
+    .select('plan_id, phone, name, email, amount_paise, workshop_id, intent_type')
     .maybeSingle();
 
   if (!intent) {
@@ -79,6 +79,26 @@ export async function POST(req: NextRequest) {
   if (intent.amount_paise != null && payment.amount !== intent.amount_paise) {
     await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
     console.error('Webhook: amount mismatch for order', orderId);
+    return NextResponse.json({ received: true });
+  }
+
+  // Workshop payments register an attendee (not a member). This is the
+  // fallback when the browser closed before /api/workshops/verify-payment ran.
+  if (intent.intent_type === 'workshop' && intent.workshop_id) {
+    const { error: regErr } = await db.rpc('register_workshop_atomic', {
+      p_workshop_id: intent.workshop_id,
+      p_name: intent.name,
+      p_phone: intent.phone || phone,
+      p_email: intent.email || null,
+      p_amount_paise: intent.amount_paise ?? 0,
+      p_payment_id: paymentId,
+      p_order_id: orderId,
+    });
+    if (regErr) {
+      await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
+      console.error('Webhook: workshop registration failed', regErr);
+      return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    }
     return NextResponse.json({ received: true });
   }
 

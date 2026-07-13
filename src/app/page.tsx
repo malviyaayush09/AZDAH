@@ -382,6 +382,9 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
+            <Link href="/workshops" className="nav-link" style={{ color: MUTED, fontSize: 13.5, letterSpacing: '0.025em', fontWeight: 500 }}>
+              Workshops
+            </Link>
           </nav>
 
           {/* Actions */}
@@ -410,6 +413,9 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
+            <Link href="/workshops" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
+              Workshops
+            </Link>
             <Link href="/login" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0' }}>
               Member login
             </Link>

@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
     .update({ status: 'completed' })
     .eq('order_id', orderId)
     .eq('status', 'pending')
+    .eq('intent_type', 'membership') // never claim a workshop intent here
     .select('plan_id, phone, name, email, amount_paise')
     .maybeSingle();
   if (!intent) {

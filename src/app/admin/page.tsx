@@ -43,7 +43,7 @@ type AuditLog = {
   details: Record<string, unknown> | null; created_at: string;
 };
 
-type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit' | 'templates' | 'instructors';
+type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit' | 'templates' | 'instructors' | 'workshops';
 
 type ClassTemplate = {
   id: string; title: string; instructor_name: string | null; instructor_id: string | null;
@@ -54,6 +54,23 @@ type ClassTemplate = {
 
 type Instructor = {
   id: string; name: string; phone: string; is_active: boolean; created_at: string;
+};
+
+type Workshop = {
+  id: string; title: string; description: string; instructor_name: string | null;
+  workshop_date: string; start_time: string; end_time: string | null;
+  capacity: number; price_paise: number; location: string | null;
+  is_active: boolean; created_at: string; registration_count: number;
+  paid_count: number; paid_total_paise: number;
+};
+
+type OrphanedPayment = {
+  order_id: string; name: string; phone: string; amount_paise: number; workshop_title: string;
+};
+
+type WorkshopReg = {
+  id: string; name: string; phone: string; email: string | null;
+  amount_paise: number; status: string; created_at: string;
 };
 
 const DARK = '#0D0B08';
@@ -159,6 +176,15 @@ export default function AdminPage() {
   const [newInstructor, setNewInstructor] = useState({ name: '', phone: '' });
   const [instructorSaving, setInstructorSaving] = useState(false);
   const [instructorBusy, setInstructorBusy] = useState<string | null>(null);
+  const [workshops, setWorkshops] = useState<Workshop[]>([]);
+  const [orphanedPayments, setOrphanedPayments] = useState<OrphanedPayment[]>([]);
+  const [workshopsLoading, setWorkshopsLoading] = useState(false);
+  const [newWorkshop, setNewWorkshop] = useState({ title: '', description: '', instructor_name: '', workshop_date: '', start_time: '', end_time: '', capacity: '20', price: '', location: '' });
+  const [workshopSaving, setWorkshopSaving] = useState(false);
+  const [workshopBusy, setWorkshopBusy] = useState<string | null>(null);
+  const [viewingWorkshop, setViewingWorkshop] = useState<Workshop | null>(null);
+  const [workshopRegs, setWorkshopRegs] = useState<WorkshopReg[]>([]);
+  const [regsLoading, setRegsLoading] = useState(false);
   type OverviewStats = {
     today: { classes: number; expected_members: number; attended: number };
     expiring_this_week: { id: string; name: string; phone: string; plan_name: string; plan_end: string; days_remaining: number }[];
@@ -480,6 +506,90 @@ export default function AdminPage() {
     else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
+  async function loadWorkshops() {
+    setWorkshopsLoading(true);
+    const res = await fetch('/api/admin/workshops');
+    const data = await res.json();
+    setWorkshops(data.workshops || []);
+    setOrphanedPayments(data.orphaned || []);
+    setWorkshopsLoading(false);
+  }
+
+  async function createWorkshop(e: React.FormEvent) {
+    e.preventDefault(); setWorkshopSaving(true); setMsg(null);
+    const priceNum = Number(newWorkshop.price || 0);
+    if (isNaN(priceNum) || priceNum < 0) { setWorkshopSaving(false); setMsg({ text: 'Enter a valid price (0 for free)', ok: false }); return; }
+    const res = await fetch('/api/admin/workshops', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: newWorkshop.title,
+        description: newWorkshop.description,
+        instructor_name: newWorkshop.instructor_name || null,
+        workshop_date: newWorkshop.workshop_date,
+        start_time: newWorkshop.start_time,
+        end_time: newWorkshop.end_time || null,
+        capacity: parseInt(newWorkshop.capacity),
+        price_paise: Math.round(priceNum * 100),
+        location: newWorkshop.location || null,
+      }),
+    });
+    const data = await res.json();
+    setWorkshopSaving(false);
+    if (data.success) {
+      setMsg({ text: `Workshop created${data.workshop.price_paise === 0 ? ' (free)' : ''}!`, ok: true });
+      setNewWorkshop({ title: '', description: '', instructor_name: '', workshop_date: '', start_time: '', end_time: '', capacity: '20', price: '', location: '' });
+      loadWorkshops();
+    } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function toggleWorkshop(w: Workshop) {
+    // Deactivating a workshop with PAID registrants: warn that hiding it does
+    // not refund anyone — that has to be done in Razorpay.
+    if (w.is_active && w.paid_count > 0) {
+      const ok = confirm(
+        `"${w.title}" has ${w.paid_count} PAID registration${w.paid_count !== 1 ? 's' : ''} totalling ₹${(w.paid_total_paise / 100).toLocaleString('en-IN')}.\n\n` +
+        `Deactivating hides it from the public page but does NOT refund anyone. Refund them in the Razorpay dashboard first.\n\nDeactivate anyway?`
+      );
+      if (!ok) return;
+    }
+    setWorkshopBusy(w.id);
+    const res = await fetch(`/api/admin/workshops/${w.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active: !w.is_active }),
+    });
+    const data = await res.json();
+    setWorkshopBusy(null);
+    if (data.success) loadWorkshops(); else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function deleteWorkshop(w: Workshop) {
+    // Delete is blocked server-side once anyone has registered (protects paid
+    // records). Explain that here instead of letting it 409, and flag refunds.
+    if (w.registration_count > 0) {
+      alert(
+        `"${w.title}" has ${w.registration_count} registration${w.registration_count !== 1 ? 's' : ''}` +
+        `${w.paid_count > 0 ? ` (${w.paid_count} paid — refund in Razorpay first)` : ''}.\n\n` +
+        `Delete is blocked to protect records. Use Deactivate to hide it from the public page instead.`
+      );
+      return;
+    }
+    if (!confirm(`Delete "${w.title}"? This can't be undone.`)) return;
+    setWorkshopBusy(w.id);
+    const res = await fetch(`/api/admin/workshops/${w.id}`, { method: 'DELETE' });
+    const data = await res.json();
+    setWorkshopBusy(null);
+    if (data.success) { setWorkshops(prev => prev.filter(x => x.id !== w.id)); setMsg({ text: 'Workshop deleted', ok: true }); }
+    else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function viewRegistrations(w: Workshop) {
+    setViewingWorkshop(w); setWorkshopRegs([]); setRegsLoading(true);
+    const res = await fetch(`/api/admin/workshops/${w.id}/registrations`);
+    const data = await res.json();
+    setWorkshopRegs(data.registrations || []);
+    setRegsLoading(false);
+  }
+
   async function deleteTemplate(id: string) {
     if (!confirm('Delete this template? This will not affect already-created classes.')) return;
     setTemplateDeleteBusy(id);
@@ -718,8 +828,8 @@ export default function AdminPage() {
         {/* ── Tab bar ── */}
         <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, marginBottom:20 }}>
           {/* 'Broadcast' tab hidden until WhatsApp is live — it would report success while sending nothing. Re-add ['broadcast','Broadcast'] when WHATSAPP_ENABLED=true. */}
-          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['templates','Templates'],['instructors','Instructors'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
-            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); if(k==='templates')loadTemplates(); if(k==='instructors')loadInstructors(); }}
+          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['templates','Templates'],['instructors','Instructors'],['workshops','Workshops'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
+            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); if(k==='templates')loadTemplates(); if(k==='instructors')loadInstructors(); if(k==='workshops')loadWorkshops(); }}
               style={{ padding:'13px 20px', fontSize:13, fontWeight:500, color: tab===k ? ORANGE : MUTED, borderBottom: tab===k ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:-1 }}>
               {l}
             </button>
@@ -1428,6 +1538,181 @@ export default function AdminPage() {
                 </button>
                 <div style={{ fontSize:11, color:MUTED }}>A password is generated and shown once — share it with them.</div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* ════ WORKSHOPS TAB ════ */}
+        {tab === 'workshops' && (
+          <div style={{ maxWidth:1150 }}>
+            {orphanedPayments.length > 0 && (
+              <div style={{ background:'rgba(248,113,113,0.08)', border:'1px solid rgba(248,113,113,0.35)', borderRadius:8, padding:'12px 16px', marginBottom:16 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#f87171', marginBottom:4 }}>⚠️ {orphanedPayments.length} paid order{orphanedPayments.length !== 1 ? 's' : ''} without a seat</div>
+                <div style={{ fontSize:12, color:MUTED, marginBottom:8 }}>These people were charged but no registration was created (usually the last seat filled during payment). Refund them in the Razorpay dashboard.</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+                  {orphanedPayments.map(o => (
+                    <div key={o.order_id} style={{ fontSize:12, color:CREAM }}>
+                      {o.name} · +{o.phone} · <strong>₹{(o.amount_paise/100).toLocaleString('en-IN')}</strong> · {o.workshop_title} <span style={{ color:MUTED }}>({o.order_id})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ display:'grid', gridTemplateColumns:'1.15fr 0.85fr', gap:24 }}>
+            {/* Left — workshop list */}
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:4 }}>Workshops</div>
+              <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>Set a price of <strong style={{ color:CREAM }}>0</strong> to make a workshop free — attendees register instantly with no payment.</div>
+              {workshopsLoading ? (
+                <div style={{ color:MUTED, fontSize:13 }}>Loading…</div>
+              ) : workshops.length === 0 ? (
+                <div style={{ color:MUTED, fontSize:13 }}>No workshops yet. Create one using the form →</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {workshops.map(w => {
+                    const past = w.workshop_date < new Date().toISOString().split('T')[0];
+                    return (
+                      <div key={w.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:'14px 16px', opacity: w.is_active ? 1 : 0.55 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10 }}>
+                          <div>
+                            <div style={{ fontSize:14, fontWeight:700, color:CREAM }}>
+                              {w.title}
+                              {!w.is_active && <span style={{ fontSize:10, color:MUTED, marginLeft:8, textTransform:'uppercase', letterSpacing:'.08em' }}>Hidden</span>}
+                              {past && <span style={{ fontSize:10, color:'#f0a', marginLeft:8, textTransform:'uppercase', letterSpacing:'.08em' }}>Past</span>}
+                            </div>
+                            <div style={{ fontSize:12, color:MUTED, marginTop:3 }}>
+                              {new Date(w.workshop_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' })}
+                              {' · '}{w.start_time.slice(0,5)}{w.end_time ? `–${w.end_time.slice(0,5)}` : ''}
+                              {w.instructor_name ? ` · ${w.instructor_name}` : ''}
+                            </div>
+                          </div>
+                          <span style={{ fontSize:12, fontWeight:700, whiteSpace:'nowrap', color: w.price_paise === 0 ? '#4ade80' : ORANGE }}>
+                            {w.price_paise === 0 ? 'FREE' : `₹${(w.price_paise/100).toLocaleString('en-IN')}`}
+                          </span>
+                        </div>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:12, flexWrap:'wrap' }}>
+                          <span style={{ fontSize:12, color:CREAM, background:'#131009', border:`1px solid ${BORDER}`, borderRadius:20, padding:'3px 10px' }}>
+                            {w.registration_count} / {w.capacity} registered
+                          </span>
+                          <button onClick={() => viewRegistrations(w)}
+                            style={{ fontSize:11, color:CREAM, background:'none', border:`1px solid ${BORDER}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>
+                            View roster
+                          </button>
+                          <button onClick={() => toggleWorkshop(w)} disabled={workshopBusy === w.id}
+                            style={{ fontSize:11, color:MUTED, background:'none', border:`1px solid ${BORDER}`, borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>
+                            {workshopBusy === w.id ? '…' : w.is_active ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button onClick={() => deleteWorkshop(w)} disabled={workshopBusy === w.id}
+                            style={{ fontSize:11, color:'#f87171', background:'none', border:'1px solid rgba(248,113,113,.25)', borderRadius:4, padding:'4px 10px', cursor:'pointer' }}>
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Right — create workshop form */}
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:CREAM, marginBottom:14 }}>New Workshop</div>
+              <form onSubmit={createWorkshop} style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Title</label>
+                  <input type="text" required placeholder="e.g. Flexibility Intensive" value={newWorkshop.title}
+                    onChange={e => setNewWorkshop(p => ({ ...p, title: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Description</label>
+                  <textarea rows={3} placeholder="What's it about, what to bring, level…" value={newWorkshop.description}
+                    onChange={e => setNewWorkshop(p => ({ ...p, description: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13, resize:'vertical', fontFamily:'inherit' }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Instructor <span style={{ color:MUTED }}>(optional)</span></label>
+                  <input type="text" placeholder="e.g. Nimisha" value={newWorkshop.instructor_name}
+                    onChange={e => setNewWorkshop(p => ({ ...p, instructor_name: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Date</label>
+                  <input type="date" required value={newWorkshop.workshop_date}
+                    onChange={e => setNewWorkshop(p => ({ ...p, workshop_date: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Start time</label>
+                    <input type="time" required value={newWorkshop.start_time} onChange={e => setNewWorkshop(p => ({ ...p, start_time: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>End time <span style={{ color:MUTED }}>(optional)</span></label>
+                    <input type="time" value={newWorkshop.end_time} onChange={e => setNewWorkshop(p => ({ ...p, end_time: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Capacity</label>
+                    <input type="number" required min="1" max="500" value={newWorkshop.capacity} onChange={e => setNewWorkshop(p => ({ ...p, capacity: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Price (₹) — 0 = free</label>
+                    <input type="number" min="0" step="1" placeholder="0" value={newWorkshop.price} onChange={e => setNewWorkshop(p => ({ ...p, price: e.target.value }))}
+                      style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Location <span style={{ color:MUTED }}>(optional)</span></label>
+                  <input type="text" placeholder="Studio / address" value={newWorkshop.location}
+                    onChange={e => setNewWorkshop(p => ({ ...p, location: e.target.value }))}
+                    style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }} />
+                </div>
+                <button type="submit" disabled={workshopSaving}
+                  style={{ background:ORANGE, border:'none', color:'#fff', borderRadius:6, padding:'10px', fontSize:13, fontWeight:600, cursor:'pointer', opacity: workshopSaving ? .6 : 1 }}>
+                  {workshopSaving ? 'Saving…' : 'Create Workshop'}
+                </button>
+                <div style={{ fontSize:11, color:MUTED }}>Appears on the public /workshops page while active.</div>
+              </form>
+            </div>
+
+            {/* Roster modal */}
+            {viewingWorkshop && (
+              <div onClick={() => setViewingWorkshop(null)} style={{ position:'fixed', inset:0, zIndex:100, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+                <div onClick={e => e.stopPropagation()} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, width:'100%', maxWidth:560, maxHeight:'80vh', overflow:'auto', padding:24 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:4 }}>
+                    <div style={{ fontSize:16, fontWeight:700, color:CREAM }}>{viewingWorkshop.title}</div>
+                    <button onClick={() => setViewingWorkshop(null)} style={{ background:'none', border:'none', color:MUTED, fontSize:22, lineHeight:1, cursor:'pointer' }}>×</button>
+                  </div>
+                  <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>
+                    {new Date(viewingWorkshop.workshop_date + 'T00:00:00').toLocaleDateString('en-IN', { weekday:'long', day:'numeric', month:'long' })} · {viewingWorkshop.registration_count} registered
+                  </div>
+                  {regsLoading ? (
+                    <div style={{ color:MUTED, fontSize:13 }}>Loading…</div>
+                  ) : workshopRegs.length === 0 ? (
+                    <div style={{ color:MUTED, fontSize:13 }}>No registrations yet.</div>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                      {workshopRegs.map((r, i) => (
+                        <div key={r.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, background:'#131009', border:`1px solid ${BORDER}`, borderRadius:6, padding:'9px 12px' }}>
+                          <div>
+                            <div style={{ fontSize:13, color:CREAM, fontWeight:600 }}>{i + 1}. {r.name}</div>
+                            <div style={{ fontSize:11, color:MUTED }}>+{r.phone}{r.email ? ` · ${r.email}` : ''}</div>
+                          </div>
+                          <span style={{ fontSize:11, fontWeight:600, color: r.amount_paise === 0 ? '#4ade80' : ORANGE }}>
+                            {r.amount_paise === 0 ? 'Free' : `₹${(r.amount_paise/100).toLocaleString('en-IN')}`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             </div>
           </div>
         )}

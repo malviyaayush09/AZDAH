@@ -24,12 +24,12 @@ export default function TermsPage() {
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '64px 28px 100px' }}>
         <p style={{ color: ORANGE, fontSize: 11, letterSpacing: '0.28em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 12 }}>Legal</p>
         <h1 style={{ fontFamily: SERIF, fontSize: 42, fontWeight: 800, marginBottom: 12, lineHeight: 1.1 }}>Terms & Conditions</h1>
-        <p style={{ color: MUTED, fontSize: 14, marginBottom: 56 }}>Last updated: June 2026</p>
+        <p style={{ color: MUTED, fontSize: 14, marginBottom: 56 }}>Last updated: July 2026</p>
 
         {[
           {
             title: '1. Acceptance of Terms',
-            body: `By purchasing a membership, booking a class, or using the AZDAH website (azdah.in), you agree to be bound by these Terms & Conditions. If you do not agree, please do not use our services.`,
+            body: `By purchasing a membership, booking a class, registering for a workshop, or using the AZDAH website (azdah.in), you agree to be bound by these Terms & Conditions. If you do not agree, please do not use our services.`,
           },
           {
             title: '2. Membership Plans',
@@ -50,7 +50,9 @@ export default function TermsPage() {
             title: '4. Payments & Refunds',
             body: `• All payments are final. We do not offer refunds on membership purchases.
 • In exceptional circumstances (serious injury, medical emergency), please contact us. Refund decisions are at AZDAH's sole discretion.
-• Payments are processed securely by Razorpay. AZDAH is not responsible for payment failures due to issues on your bank's end.`,
+• Payments are processed securely by Razorpay. AZDAH is not responsible for payment failures due to issues on your bank's end.
+• Workshops & one-off events: paid workshops are charged at the price shown at the time of registration. Workshop fees are non-refundable except where AZDAH cancels or reschedules the workshop, in which case registered attendees are refunded in full to their original payment method within 7 working days.
+• Some workshops may be offered free of charge; these require registration but no payment.`,
           },
           {
             title: '5. Membership Freeze / Pause',
