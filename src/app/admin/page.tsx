@@ -1776,7 +1776,7 @@ export default function AdminPage() {
             <div style={{ fontSize:15, fontWeight:600, color:CREAM, marginBottom:4 }}>Issue Refund</div>
             <div style={{ fontSize:13, color:MUTED, marginBottom:20 }}>{refundModal.name} · {refundModal.plan_name}</div>
             <div style={{ fontSize:12, color:'#fbbf24', background:'rgba(251,191,36,.06)', border:'1px solid rgba(251,191,36,.2)', borderRadius:6, padding:'10px 12px', marginBottom:14 }}>
-              Full plan amount will be refunded via Razorpay. Member will be deactivated.
+              The full amount actually paid (after any promo/discount) will be refunded via Razorpay. Member will be deactivated.
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
               <input placeholder="Reason (optional)" value={refundReason} onChange={e => setRefundReason(e.target.value)}

@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
   const db = getServiceClient();
   const { data: member } = await db
     .from('members')
-    .select('id, name, razorpay_payment_id, membership_plans(price_paise)')
+    .select('id, name, razorpay_payment_id')
     .eq('id', params.memberId)
     .single();
 
@@ -33,19 +33,29 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
     return NextResponse.json({ error: 'No payment on file for this member' }, { status: 400 });
   }
 
-  const planRaw = member.membership_plans;
-  const plan = (Array.isArray(planRaw) ? planRaw[0] : planRaw) as { price_paise: number } | null;
-  const refundAmount = amount_paise ?? plan?.price_paise;
-  if (!refundAmount) {
-    return NextResponse.json({ error: 'Could not determine refund amount' }, { status: 400 });
-  }
-
-  if (plan && refundAmount > plan.price_paise) {
-    return NextResponse.json({ error: 'Refund amount exceeds original payment' }, { status: 400 });
-  }
-
   const rpKeyId = process.env.RAZORPAY_KEY_ID!;
   const rpKeySecret = process.env.RAZORPAY_KEY_SECRET!;
+  const authHeader = `Basic ${btoa(`${rpKeyId}:${rpKeySecret}`)}`;
+
+  // Ask Razorpay what was ACTUALLY captured (and already refunded) for this
+  // payment — a plan's list price is irrelevant once a promo/discount was
+  // applied at checkout, so it can never be trusted as the refund ceiling.
+  const paymentRes = await fetch(`https://api.razorpay.com/v1/payments/${member.razorpay_payment_id}`, {
+    headers: { Authorization: authHeader },
+  });
+  if (!paymentRes.ok) {
+    return NextResponse.json({ error: 'Could not look up the original payment on Razorpay' }, { status: 502 });
+  }
+  const payment = await paymentRes.json() as { amount: number; amount_refunded: number };
+  const refundableAmount = payment.amount - (payment.amount_refunded ?? 0);
+  if (refundableAmount <= 0) {
+    return NextResponse.json({ error: 'This payment has already been fully refunded' }, { status: 400 });
+  }
+
+  const refundAmount = amount_paise ?? refundableAmount;
+  if (refundAmount > refundableAmount) {
+    return NextResponse.json({ error: 'Refund amount exceeds what remains refundable on this payment' }, { status: 400 });
+  }
 
   const body: Record<string, unknown> = { amount: refundAmount };
   if (reason) body.notes = { reason };
@@ -72,8 +82,8 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
 
   const refund = await res.json() as { id: string; amount: number };
 
-  // Deactivate member after full refund
-  if (!amount_paise || amount_paise === plan?.price_paise) {
+  // Deactivate member after a full refund of what's left refundable
+  if (refundAmount === refundableAmount) {
     await db.from('members').update({ is_active: false }).eq('id', params.memberId);
   }
 
