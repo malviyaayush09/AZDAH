@@ -41,14 +41,21 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
   // payment — a plan's list price is irrelevant once a promo/discount was
   // applied at checkout, so it can never be trusted as the refund ceiling.
   const paymentRes = await fetch(`https://api.razorpay.com/v1/payments/${member.razorpay_payment_id}`, {
-    headers: { Authorization: authHeader },
+    headers: { Authorization: authHeader, Accept: 'application/json' },
   });
   if (!paymentRes.ok) {
-    const err = await paymentRes.json().catch(() => null) as { error?: { code?: string; description?: string } } | null;
+    const text = await paymentRes.text().catch(() => '');
+    let description = 'no details returned';
+    let code: string | undefined;
+    try {
+      const err = JSON.parse(text) as { error?: { code?: string; description?: string } };
+      description = err.error?.description ?? description;
+      code = err.error?.code;
+    } catch { /* body wasn't JSON */ }
     return NextResponse.json(
       {
-        error: `Could not look up the original payment on Razorpay (HTTP ${paymentRes.status}): ${err?.error?.description ?? 'no details returned'}`,
-        razorpay_code: err?.error?.code,
+        error: `Could not look up the original payment on Razorpay (HTTP ${paymentRes.status}): ${description}`,
+        razorpay_code: code,
         payment_id: member.razorpay_payment_id,
       },
       { status: 502 },
@@ -75,6 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
       headers: {
         Authorization: `Basic ${btoa(`${rpKeyId}:${rpKeySecret}`)}`,
         'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
       body: JSON.stringify(body),
     }
