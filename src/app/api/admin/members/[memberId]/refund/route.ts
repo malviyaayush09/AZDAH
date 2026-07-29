@@ -44,7 +44,15 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
     headers: { Authorization: authHeader },
   });
   if (!paymentRes.ok) {
-    return NextResponse.json({ error: 'Could not look up the original payment on Razorpay' }, { status: 502 });
+    const err = await paymentRes.json().catch(() => null) as { error?: { code?: string; description?: string } } | null;
+    return NextResponse.json(
+      {
+        error: `Could not look up the original payment on Razorpay (HTTP ${paymentRes.status}): ${err?.error?.description ?? 'no details returned'}`,
+        razorpay_code: err?.error?.code,
+        payment_id: member.razorpay_payment_id,
+      },
+      { status: 502 },
+    );
   }
   const payment = await paymentRes.json() as { amount: number; amount_refunded: number };
   const refundableAmount = payment.amount - (payment.amount_refunded ?? 0);
