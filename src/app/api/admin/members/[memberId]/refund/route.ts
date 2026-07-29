@@ -1,4 +1,5 @@
-export const runtime = 'edge';
+// Runs on the Node.js default runtime — calls to api.razorpay.com fail with
+// HTTP 406 from the edge runtime (same reason /api/create-order was moved).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';

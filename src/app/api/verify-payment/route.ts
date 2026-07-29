@@ -1,4 +1,6 @@
-export const runtime = 'edge';
+// Runs on the Node.js default runtime — the Razorpay confirmation fetch below
+// gets HTTP 406 from the edge runtime, which silently downgraded this route to
+// signature-only verification (same reason /api/create-order was moved).
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
