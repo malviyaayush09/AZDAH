@@ -69,23 +69,61 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, created: 0, skipped: 0, message: 'No templates match any day in this range' });
   }
 
-  // Fetch classes that already exist in this date range to avoid duplicates
+  // Fetch classes that already exist in this date range to avoid duplicates.
+  // Cancelled ones must NOT count as duplicates — otherwise once an admin
+  // cancels a slot, Generate Cycle can never recreate it ("already existed").
   const { data: existing } = await db
     .from('classes')
-    .select('class_date, start_time, title')
+    .select('id, class_date, start_time, title, is_cancelled')
     .gte('class_date', startDate)
     .lte('class_date', endDate);
 
-  const existingKeys = new Set((existing || []).map(c => `${c.class_date}|${c.start_time}|${c.title}`));
-  const toInsert = candidates.filter(c => !existingKeys.has(`${c.class_date}|${c.start_time}|${c.title}`));
-  const skipped = candidates.length - toInsert.length;
+  const keyOf = (c: { class_date: string; start_time: string; title: string }) =>
+    `${c.class_date}|${c.start_time}|${c.title}`;
 
-  if (toInsert.length === 0) {
-    return NextResponse.json({ success: true, created: 0, skipped, message: 'All classes already exist for this period' });
+  const activeKeys = new Set<string>();
+  const cancelledByKey = new Map<string, string>(); // key -> existing class id
+  for (const c of existing || []) {
+    const k = keyOf(c);
+    if (c.is_cancelled) {
+      if (!cancelledByKey.has(k)) cancelledByKey.set(k, c.id);
+    } else {
+      activeKeys.add(k);
+    }
   }
 
-  const { data: inserted, error: insErr } = await db.from('classes').insert(toInsert).select('id');
-  if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+  const toInsert: ClassRow[] = [];
+  const toRestore: string[] = [];
+  for (const c of candidates) {
+    const k = keyOf(c);
+    if (activeKeys.has(k)) continue;            // genuine duplicate — skip
+    const cancelledId = cancelledByKey.get(k);
+    if (cancelledId) {                          // revive rather than duplicate the row
+      toRestore.push(cancelledId);
+      cancelledByKey.delete(k);
+      activeKeys.add(k);
+      continue;
+    }
+    toInsert.push(c);
+    activeKeys.add(k);                          // guards against two identical templates in one run
+  }
+  const skipped = candidates.length - toInsert.length - toRestore.length;
 
-  return NextResponse.json({ success: true, created: inserted?.length ?? 0, skipped });
+  if (toInsert.length === 0 && toRestore.length === 0) {
+    return NextResponse.json({ success: true, created: 0, restored: 0, skipped, message: 'All classes already exist for this period' });
+  }
+
+  if (toRestore.length > 0) {
+    const { error: resErr } = await db.from('classes').update({ is_cancelled: false }).in('id', toRestore);
+    if (resErr) return NextResponse.json({ error: resErr.message }, { status: 500 });
+  }
+
+  let created = 0;
+  if (toInsert.length > 0) {
+    const { data: inserted, error: insErr } = await db.from('classes').insert(toInsert).select('id');
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+    created = inserted?.length ?? 0;
+  }
+
+  return NextResponse.json({ success: true, created, restored: toRestore.length, skipped });
 }

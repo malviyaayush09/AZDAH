@@ -270,7 +270,15 @@ export default function AdminPage() {
     }
     const res = await fetch(`/api/admin/classes/${cls.id}/cancel`, { method: 'POST' });
     const data = await res.json();
-    if (data.success) { setMsg({ text: `Class cancelled. WhatsApp opened for ${classBookings.length} member${classBookings.length !== 1 ? 's' : ''}.`, ok: true }); fetchAll(); setViewingClass(null); }
+    if (data.success) {
+      const released = data.released ?? 0;
+      setMsg({
+        text: `Class cancelled. WhatsApp opened for ${classBookings.length} member${classBookings.length !== 1 ? 's' : ''}.`
+          + (released ? ` ${released} booking${released !== 1 ? 's' : ''} released — their class credit is back.` : ''),
+        ok: true,
+      });
+      fetchAll(); setViewingClass(null);
+    }
     else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
@@ -621,7 +629,11 @@ export default function AdminPage() {
     setGenCycleSaving(false);
     if (data.success) {
       setGenCycleResult({ created: data.created, skipped: data.skipped });
-      setMsg({ text: `Done — ${data.created} classes created, ${data.skipped} already existed.`, ok: true });
+      const restored = data.restored ?? 0;
+      setMsg({
+        text: `Done — ${data.created} created${restored ? `, ${restored} cancelled class${restored !== 1 ? 'es' : ''} restored` : ''}, ${data.skipped} already existed.`,
+        ok: true,
+      });
       fetchAll();
     } else setMsg({ text: data.error || 'Failed', ok: false });
   }
