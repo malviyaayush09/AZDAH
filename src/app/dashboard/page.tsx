@@ -35,7 +35,16 @@ type MemberStats = {
 const DARK='#0D0B08', CARD='#1A1410', BORDER='#2A2118', CREAM='#F5F0E8', MUTED='#8A7A6A', ORANGE='#F83433';
 const SERIF='var(--font-bodoni), Georgia, serif';
 
-function toYMD(d: Date) { return d.toISOString().split('T')[0]; }
+// Format a Date as YYYY-MM-DD using its LOCAL calendar parts. Must not use
+// toISOString(): the day strip builds days at local midnight, which in IST
+// (UTC+5:30) is 18:30 the previous day in UTC — so toISOString() would look up
+// the wrong date and show each class on the following day.
+function toYMD(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 function fmtTime(t: string) {
   const [h,m]=t.split(':').map(Number);
   return `${h%12||12}:${m.toString().padStart(2,'0')} ${h>=12?'PM':'AM'}`;

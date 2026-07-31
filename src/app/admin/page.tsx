@@ -108,7 +108,16 @@ function getWeekDates(ref: Date): Date[] {
   d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
   return Array.from({ length: 7 }, (_, i) => { const nd = new Date(d); nd.setDate(d.getDate() + i); return nd; });
 }
-function toYMD(d: Date) { return d.toISOString().split('T')[0]; }
+// Format a Date as YYYY-MM-DD using its LOCAL calendar parts. Must not use
+// toISOString(): getWeekDates()/mondayOf() build days at local midnight, which
+// in IST (UTC+5:30) is 18:30 the previous day in UTC — so toISOString() named
+// every column the day before and shifted the whole calendar by one day.
+function toYMD(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 function fmtDate(s: string) {
   const d = s.includes('T') ? new Date(s) : new Date(s + 'T00:00:00');
   return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -1570,7 +1579,7 @@ export default function AdminPage() {
               ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                   {workshops.map(w => {
-                    const past = w.workshop_date < new Date().toISOString().split('T')[0];
+                    const past = w.workshop_date < todayStr;
                     return (
                       <div key={w.id} style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:'14px 16px', opacity: w.is_active ? 1 : 0.55 }}>
                         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10 }}>
