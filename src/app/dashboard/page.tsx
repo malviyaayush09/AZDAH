@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Settings, CalendarDays, Info, Eye, EyeOff, User } from 'lucide-react';
 
@@ -67,6 +67,7 @@ export default function DashboardPage() {
   const [myBookings, setMyBookings] = useState<ClassSlot[]>([]);
   const [history, setHistory]       = useState<HistoryItem[]>([]);
   const [tab, setTab]               = useState<Tab>('book');
+  const bookingPanelRef             = useRef<HTMLDivElement>(null);
   const [loading, setLoading]       = useState(true);
   const [histLoading, setHistLoading] = useState(false);
   const [msg, setMsg]               = useState<{text:string;ok:boolean}|null>(null);
@@ -135,6 +136,17 @@ export default function DashboardPage() {
       );
       setWaitlistPos(positions.filter(Boolean) as WaitlistPos[]);
     }
+  }
+
+  // Open the "Book a Class" tab AND scroll to it. Scrolling is the important
+  // half: 'book' is the default tab, so setTab alone is a no-op and the button
+  // looks broken when the class list is already rendered below the fold.
+  function goToBooking() {
+    setTab('book');
+    setMsg(null);
+    requestAnimationFrame(() => {
+      bookingPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   }
 
   async function loadHistory() {
@@ -347,7 +359,7 @@ export default function DashboardPage() {
                 <div style={{color:MUTED,fontSize:12,marginTop:3}}>Browse and book your next session.</div>
               </div>
             </div>
-            <button onClick={()=>{setTab('book');setMsg(null);}}
+            <button onClick={goToBooking}
               style={{background:ORANGE,border:'none',color:'#fff',fontWeight:700,fontSize:12,padding:'11px 22px',borderRadius:6,cursor:'pointer'}}>
               Browse classes →
             </button>
@@ -443,7 +455,7 @@ export default function DashboardPage() {
           )}
 
           {/* Tabs */}
-          <div style={{display:'flex',borderBottom:`1px solid ${BORDER}`,padding:'0 20px'}}>
+          <div ref={bookingPanelRef} style={{display:'flex',borderBottom:`1px solid ${BORDER}`,padding:'0 20px',scrollMarginTop:16}}>
             {([['book','Book a Class'],['my-bookings',`My Bookings${myBookings.length>0?' ('+myBookings.length+')':''}`],['history','History'],['profile','Profile']] as const).map(([k,l])=>(
               <button key={k} className="tab-btn" onClick={()=>{setTab(k);setMsg(null);if(k==='history')loadHistory();}}
                 style={{padding:'14px 16px',fontSize:13,fontWeight:500,color:tab===k?ORANGE:MUTED,
@@ -570,7 +582,7 @@ export default function DashboardPage() {
                   </div>
                 )}
                 {myBookings.length===0?(
-                  <div style={{textAlign:'center',padding:'64px 0',color:MUTED,fontSize:14}}>No bookings yet. <button onClick={()=>setTab('book')} style={{color:ORANGE,background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontSize:14}}>Book a class</button></div>
+                  <div style={{textAlign:'center',padding:'64px 0',color:MUTED,fontSize:14}}>No bookings yet. <button onClick={goToBooking} style={{color:ORANGE,background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontSize:14}}>Book a class</button></div>
                 ):(
                   <div style={{display:'flex',flexDirection:'column',gap:10}}>
                     {myBookings.sort((a,b)=>(a.class_date+a.start_time).localeCompare(b.class_date+b.start_time)).map(cls=>{
