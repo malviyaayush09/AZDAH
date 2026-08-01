@@ -42,13 +42,16 @@ export async function POST(req: NextRequest) {
   const admin = await requireAdmin(req);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { title, trainer_name, class_date, start_time, end_time, capacity } = await req.json();
+  const { title, trainer_name, class_date, start_time, end_time, capacity, category, instructor_id } = await req.json();
 
   if (!title || !class_date || !start_time || !end_time || !capacity) {
     return NextResponse.json({ error: 'All fields except trainer are required' }, { status: 400 });
   }
 
   const db = getServiceClient();
+  // Category matters: the member class list filters by the categories a pack
+  // allows, so a class saved without one is invisible to tier-restricted
+  // members — and it also skips the tier gate when booking.
   const { error } = await db.from('classes').insert({
     title,
     trainer_name: trainer_name || null,
@@ -56,6 +59,8 @@ export async function POST(req: NextRequest) {
     start_time,
     end_time,
     capacity: parseInt(capacity),
+    category: category || null,
+    instructor_id: instructor_id || null,
   });
 
   if (error) return NextResponse.json({ error: 'Failed to create class' }, { status: 500 });

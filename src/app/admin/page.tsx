@@ -147,6 +147,9 @@ export default function AdminPage() {
   const [classBookings, setClassBookings] = useState<ClassBooking[]>([]);
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [newClass, setNewClass] = useState({ title:'', trainer_name:'', class_date:'', start_time:'', end_time:'', capacity:'20' });
+  // Kept out of `newClass` so the existing text-input loop below stays untouched.
+  const [newClassCategory, setNewClassCategory] = useState('pole_regular');
+  const [newClassInstructor, setNewClassInstructor] = useState('');
   const [saving, setSaving] = useState(false);
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
   const [revLoading, setRevLoading] = useState(false);
@@ -245,13 +248,23 @@ export default function AdminPage() {
     setSaving(true); setMsg(null);
     const res = await fetch('/api/admin/classes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newClass, capacity: parseInt(newClass.capacity) }),
+      body: JSON.stringify({
+        ...newClass,
+        capacity: parseInt(newClass.capacity),
+        category: newClassCategory,
+        instructor_id: newClassInstructor || null,
+        // Keep the label in sync with the picked instructor, like templates do.
+        trainer_name: newClass.trainer_name
+          || instructors.find(i => i.id === newClassInstructor)?.name
+          || null,
+      }),
     });
     const data = await res.json();
     setSaving(false);
     if (data.success) {
       setMsg({ text: 'Class scheduled!', ok: true });
       setNewClass({ title:'', trainer_name:'', class_date:'', start_time:'', end_time:'', capacity:'20' });
+      setNewClassCategory('pole_regular'); setNewClassInstructor('');
       fetchAll(); setTab('calendar');
     } else setMsg({ text: data.error || 'Failed', ok: false });
   }
@@ -1226,6 +1239,31 @@ export default function AdminPage() {
                       style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }} />
                   </div>
                 ))}
+
+                <div>
+                  <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>Instructor</label>
+                  <select value={newClassInstructor} onChange={e => setNewClassInstructor(e.target.value)}
+                    style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }}>
+                    <option value="">— No instructor —</option>
+                    {instructors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>Category *</label>
+                  <select value={newClassCategory} onChange={e => setNewClassCategory(e.target.value)}
+                    style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }}>
+                    <option value="pole_regular">Pole (Regular)</option>
+                    <option value="pole_nimisha">Pole (Nimisha)</option>
+                    <option value="strength">Strength</option>
+                    <option value="mobility">Mobility</option>
+                    <option value="self_practice">Self Practice</option>
+                  </select>
+                  <div style={{ fontSize:11, color:MUTED, marginTop:6, lineHeight:1.5 }}>
+                    Members only see classes their pack covers — a class without a category is hidden from them.
+                  </div>
+                </div>
+
                 <button type="submit" disabled={saving}
                   style={{ marginTop:4, padding:'13px', background: saving ? MUTED : ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:600, cursor: saving ? 'not-allowed' : 'pointer' }}>
                   {saving ? 'Scheduling...' : 'Schedule Class'}
