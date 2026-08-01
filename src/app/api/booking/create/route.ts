@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Check class pack not exhausted + class tier is covered by the member's pack
+  let packLimit: number | null = null;
   if (member.plan_id) {
     const { data: planData } = await db
       .from('membership_plans')
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
+      packLimit = planData.classes_included;
       const { count: usedCount } = await db
         .from('bookings')
         .select('*', { count: 'exact', head: true })
@@ -101,6 +103,30 @@ export async function POST(req: NextRequest) {
   if (result === 'class_not_found') return NextResponse.json({ error: 'Class not found' }, { status: 404 });
   if (result === 'class_full') return NextResponse.json({ error: 'Class is full' }, { status: 400 });
   if (result === 'already_booked') return NextResponse.json({ error: 'Already booked for this class' }, { status: 400 });
+
+  // The pack check above is check-then-insert: two simultaneous requests can
+  // both pass it and overshoot the pack. Re-count now that the row exists and
+  // undo this booking if it turned out to be one too many. (The capacity race
+  // is already handled inside book_class_atomic; the pack limit is not.)
+  if (packLimit !== null) {
+    const { count: confirmedNow } = await db
+      .from('bookings')
+      .select('*', { count: 'exact', head: true })
+      .eq('member_id', memberId)
+      .eq('status', 'confirmed')
+      .gte('created_at', (member.plan_start || '1970-01-01') + 'T00:00:00Z');
+    if ((confirmedNow || 0) > packLimit) {
+      await db.from('bookings')
+        .update({ status: 'cancelled' })
+        .eq('member_id', memberId)
+        .eq('class_id', classId)
+        .eq('status', 'confirmed');
+      return NextResponse.json(
+        { error: `All ${packLimit} class${packLimit !== 1 ? 'es' : ''} in your pack have been used. Please purchase a new pack to continue.` },
+        { status: 400 }
+      );
+    }
+  }
 
   // WhatsApp confirmation
   const dateStr = new Date(cls.class_date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });

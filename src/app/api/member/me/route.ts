@@ -15,11 +15,23 @@ export async function GET(req: NextRequest) {
   const db = getServiceClient();
   const { data: member } = await db
     .from('members')
-    .select('id, name, phone, plan_id, plan_start, plan_end, reschedule_used_this_month, reschedule_reset_date, must_change_password, is_frozen, membership_plans(name, classes_included)')
+    .select('id, name, phone, plan_id, plan_start, plan_end, reschedule_used_this_month, reschedule_reset_date, must_change_password, is_frozen, is_active, sessions_valid_from, membership_plans(name, classes_included)')
     .eq('id', memberId)
     .single();
 
   if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 404 });
+
+  // Session tokens are self-contained and last 7 days, so deactivating a member
+  // or resetting their password did not log them out. Reject revoked sessions
+  // here — the dashboard polls this endpoint, so it bounces them to login.
+  if (!member.is_active) {
+    return NextResponse.json({ error: 'Account is inactive' }, { status: 401 });
+  }
+  const issuedAt = (session as { iat?: number }).iat;
+  if (member.sessions_valid_from && issuedAt
+      && issuedAt * 1000 < new Date(member.sessions_valid_from).getTime()) {
+    return NextResponse.json({ error: 'Session expired. Please log in again.' }, { status: 401 });
+  }
 
   const planEnd = member.plan_end ? new Date(member.plan_end) : new Date();
   const today = new Date();

@@ -99,10 +99,23 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
 
   const refund = await res.json() as { id: string; amount: number };
 
-  // Deactivate member after a full refund of what's left refundable
+  // Record the refund so revenue reporting can subtract it — a refunded member
+  // used to keep counting as full income forever.
+  const { data: current } = await db
+    .from('members')
+    .select('refunded_paise')
+    .eq('id', params.memberId)
+    .single();
+  const update: Record<string, unknown> = {
+    refunded_paise: (current?.refunded_paise ?? 0) + refundAmount,
+  };
+
+  // Deactivate + log out after a full refund of what's left refundable.
   if (refundAmount === refundableAmount) {
-    await db.from('members').update({ is_active: false }).eq('id', params.memberId);
+    update.is_active = false;
+    update.sessions_valid_from = new Date().toISOString();
   }
+  await db.from('members').update(update).eq('id', params.memberId);
 
   return NextResponse.json({ ok: true, refund_id: refund.id, amount: refund.amount });
 }

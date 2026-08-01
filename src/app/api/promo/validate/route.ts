@@ -2,13 +2,25 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { checkRateLimit, recordRequest } from '@/lib/rate-limit';
 
 export async function POST(req: NextRequest) {
-  const { code, planId } = await req.json() as { code: string; planId: string };
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  const { code, planId } = body as { code: string; planId: string };
 
   if (!code || !planId) {
     return NextResponse.json({ error: 'Code and planId required' }, { status: 400 });
   }
+
+  // Unauthenticated endpoint — without a limit, promo codes can be brute-forced
+  // by guessing until one validates.
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+  const rlKey = `promo:${ip}`;
+  if (await checkRateLimit(rlKey, 10, 60)) {
+    return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 });
+  }
+  await recordRequest(rlKey);
 
   const db = getServiceClient();
   const { data: promo } = await db

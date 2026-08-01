@@ -28,7 +28,9 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
 
   const { error } = await db
     .from('members')
-    .update({ password_hash: hash, must_change_password: true })
+    // Bumping sessions_valid_from kills sessions issued with the old password —
+    // a reset previously left existing 7-day logins working.
+    .update({ password_hash: hash, must_change_password: true, sessions_valid_from: new Date().toISOString() })
     .eq('id', params.memberId);
 
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 });

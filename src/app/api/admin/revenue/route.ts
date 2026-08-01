@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   const { data: members } = await db
     .from('members')
-    .select('created_at, plan_id, razorpay_payment_id, razorpay_order_id, membership_plans(name, price_paise, plan_category)')
+    .select('created_at, plan_id, razorpay_payment_id, razorpay_order_id, refunded_paise, membership_plans(name, price_paise, plan_category)')
     .not('razorpay_payment_id', 'is', null)
     .order('created_at', { ascending: true });
 
@@ -44,10 +44,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Fall back to the list price only for legacy rows predating amount_paise.
+  // Net revenue = actually charged, minus anything refunded. Fall back to the
+  // list price only for legacy rows predating amount_paise.
   const priceOf = (m: (typeof all)[number]) => {
     const paid = m.razorpay_order_id ? paidByOrder.get(m.razorpay_order_id) : undefined;
-    return paid ?? pick(m.membership_plans)?.price_paise ?? 0;
+    const gross = paid ?? pick(m.membership_plans)?.price_paise ?? 0;
+    return Math.max(0, gross - (m.refunded_paise ?? 0));
   };
   const nameOf = (m: (typeof all)[number]) => pick(m.membership_plans)?.name || 'Unknown';
   const catOf = (m: (typeof all)[number]) => pick(m.membership_plans)?.plan_category || 'other';
