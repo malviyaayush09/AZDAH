@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { todayIST } from '@/lib/date';
 import { verifySession } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getServiceClient();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayIST();
 
   const { data: classes } = await db
     .from('classes')

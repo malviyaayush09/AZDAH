@@ -2,10 +2,11 @@ export const runtime = 'edge';
 
 import { NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { todayIST } from '@/lib/date';
 
 export async function GET() {
   const db = getServiceClient();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayIST();
   const in14Days = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
 
   const { data } = await db

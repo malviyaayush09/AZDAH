@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { todayIST } from '@/lib/date';
 import { verifySession } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   const from = new Date();
   from.setDate(from.getDate() - 14);
   const fromStr = from.toISOString().split('T')[0];
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = todayIST();
 
   const { data: classes } = await db
     .from('classes')

@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { todayIST } from '@/lib/date';
 import { verifySession } from '@/lib/auth';
 import { sendAdminBroadcast } from '@/lib/whatsapp';
 
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
   let query = db.from('members').select('id, name, phone').eq('is_active', true);
 
   if (audience === 'expiring') {
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayIST();
     const in7Days = new Date();
     in7Days.setDate(in7Days.getDate() + 7);
     query = query.lte('plan_end', in7Days.toISOString().split('T')[0]).gte('plan_end', today) as typeof query;

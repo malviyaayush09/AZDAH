@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { todayIST } from '@/lib/date';
 import { verifySession } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -13,7 +14,7 @@ export async function GET(req: NextRequest) {
   const { memberId } = session as { memberId: string };
 
   const db = getServiceClient();
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayIST();
 
   // Get all bookings for this member
   const { data: bookings } = await db
