@@ -3,7 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { sendClassReminder } from '@/lib/whatsapp';
-import { classStartsAt } from '@/lib/date';
+import { todayIST, classHasStarted } from '@/lib/date';
 
 export async function GET(req: NextRequest) {
   // Vercel Cron authenticates with `Authorization: Bearer <CRON_SECRET>`;
@@ -17,16 +17,13 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getServiceClient();
-  const now = new Date();
+  const today = todayIST();
 
-  // Find bookings for classes starting in 1.5–2.5 hours that haven't been reminded
-  const from = new Date(now.getTime() + 90 * 60 * 1000);
-  const to = new Date(now.getTime() + 150 * 60 * 1000);
-
-  const fromDate = from.toISOString().split('T')[0];
-  const toDate = to.toISOString().split('T')[0];
-  const fromTime = from.toTimeString().slice(0, 5);
-  const toTime = to.toTimeString().slice(0, 5);
+  // Vercel's Hobby plan allows only ONE cron run per day, so this cannot be a
+  // "2 hours before class" reminder — a single daily run would only ever catch
+  // the handful of classes in that window and silently skip everyone else.
+  // Instead this is a morning digest: remind anyone booked into a class later
+  // TODAY. Runs 07:30 IST (02:00 UTC).
 
   // Fetch confirmed bookings with class + member info
   const { data: bookings, error } = await db
@@ -51,11 +48,10 @@ export async function GET(req: NextRequest) {
     const cls = (Array.isArray(clsRaw) ? clsRaw[0] : clsRaw) as { title: string; class_date: string; start_time: string } | null;
     if (!cls) continue;
 
-    // Check if class is in the 1.5–2.5 hour window
-    const classStart = classStartsAt(cls.class_date, cls.start_time);
-    const diffMs = classStart.getTime() - now.getTime();
-    const diffMins = diffMs / 60000;
-    if (diffMins < 90 || diffMins > 150) continue;
+    // Only classes happening later today (IST) — skip other days, and skip any
+    // class that has already started.
+    if (cls.class_date !== today) continue;
+    if (classHasStarted(cls.class_date, cls.start_time)) continue;
 
     const memberRaw = booking.members;
     const member = (Array.isArray(memberRaw) ? memberRaw[0] : memberRaw) as { name: string; phone: string } | null;
