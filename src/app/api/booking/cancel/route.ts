@@ -49,17 +49,17 @@ export async function POST(req: NextRequest) {
   // and skip anyone who could not have booked this class themselves.
   const { data: queue } = await db
     .from('waitlist')
-    .select('id, member_id, members(name, phone, is_active, plan_end, plan_start, plan_id)')
+    .select('id, member_id, members(name, phone, is_active, is_frozen, plan_end, plan_start, plan_id)')
     .eq('class_id', booking.class_id)
     .order('created_at', { ascending: true });
 
-  type WaitMember = { name: string; phone: string; is_active: boolean; plan_end: string | null; plan_start: string | null; plan_id: string | null };
+  type WaitMember = { name: string; phone: string; is_active: boolean; is_frozen: boolean | null; plan_end: string | null; plan_start: string | null; plan_id: string | null };
   let next: { id: string; member_id: string; members: WaitMember } | null = null;
 
   for (const entry of queue || []) {
     const raw = entry.members;
     const m = (Array.isArray(raw) ? raw[0] : raw) as WaitMember | null;
-    if (!m || !m.is_active) continue;
+    if (!m || !m.is_active || m.is_frozen) continue;
     if (m.plan_end && new Date(m.plan_end) < new Date()) continue;
 
     if (m.plan_id) {

@@ -3,21 +3,27 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { sendExpiryReminder } from '@/lib/whatsapp';
+import { todayIST } from '@/lib/date';
 
 // Called daily by Vercel Cron — no session auth, protected by CRON_SECRET header
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
+  // Vercel Cron authenticates with `Authorization: Bearer <CRON_SECRET>`;
+  // accept the custom header too so manual/curl invocations still work.
+  const secret = process.env.CRON_SECRET;
+  const authorized =
+    req.headers.get('x-cron-secret') === secret ||
+    req.headers.get('authorization') === `Bearer ${secret}`;
+  if (!secret || !authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const db = getServiceClient();
 
-  // Members expiring in exactly 3 days who haven't been reminded yet
-  const today = new Date();
-  const in3Days = new Date(today);
-  in3Days.setDate(today.getDate() + 3);
-  const target = in3Days.toISOString().split('T')[0];
+  // Members expiring in exactly 3 days who haven't been reminded yet.
+  // Anchor on the studio's calendar day (IST), not the server's UTC day —
+  // otherwise the target lands on the wrong date for half of each day.
+  const [ty, tm, td] = todayIST().split('-').map(Number);
+  const target = new Date(Date.UTC(ty, tm - 1, td + 3)).toISOString().split('T')[0];
 
   const { data: expiring, error } = await db
     .from('members')

@@ -6,8 +6,13 @@ import { sendClassReminder } from '@/lib/whatsapp';
 import { classStartsAt } from '@/lib/date';
 
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get('x-cron-secret');
-  if (secret !== process.env.CRON_SECRET) {
+  // Vercel Cron authenticates with `Authorization: Bearer <CRON_SECRET>`;
+  // accept the custom header too so manual/curl invocations still work.
+  const secret = process.env.CRON_SECRET;
+  const authorized =
+    req.headers.get('x-cron-secret') === secret ||
+    req.headers.get('authorization') === `Bearer ${secret}`;
+  if (!secret || !authorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

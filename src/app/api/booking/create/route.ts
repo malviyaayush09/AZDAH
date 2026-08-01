@@ -34,12 +34,18 @@ export async function POST(req: NextRequest) {
   // Fetch class and member
   const [{ data: cls }, { data: member }] = await Promise.all([
     db.from('classes').select('*').eq('id', classId).single(),
-    db.from('members').select('phone, name, plan_end, plan_start, plan_id, is_active').eq('id', memberId).single(),
+    db.from('members').select('phone, name, plan_end, plan_start, plan_id, is_active, is_frozen').eq('id', memberId).single(),
   ]);
 
   if (!cls) return NextResponse.json({ error: 'Class not found' }, { status: 404 });
   if (cls.is_cancelled) return NextResponse.json({ error: 'Class is cancelled' }, { status: 400 });
   if (!member || !member.is_active) return NextResponse.json({ error: 'Membership inactive' }, { status: 403 });
+
+  // A frozen membership is paused — freezing set the flag but nothing enforced
+  // it, so frozen members could still book.
+  if (member.is_frozen) {
+    return NextResponse.json({ error: 'Your membership is currently frozen. Please contact the studio to resume it.' }, { status: 403 });
+  }
 
   // Check class hasn't already started (IST wall-clock — see lib/date.ts)
   if (classHasStarted(cls.class_date, cls.start_time)) {
