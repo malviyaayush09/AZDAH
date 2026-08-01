@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { classHasStarted } from '@/lib/date';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -34,11 +35,8 @@ export async function PATCH(req: NextRequest) {
       .select('class_date, start_time')
       .eq('id', booking.class_id)
       .single();
-    if (cls) {
-      const classDateTime = new Date(`${cls.class_date}T${cls.start_time}`);
-      if (classDateTime > new Date()) {
-        return NextResponse.json({ error: 'Cannot mark attendance for a class that has not started yet' }, { status: 400 });
-      }
+    if (cls && !classHasStarted(cls.class_date, cls.start_time)) {
+      return NextResponse.json({ error: 'Cannot mark attendance for a class that has not started yet' }, { status: 400 });
     }
   }
 

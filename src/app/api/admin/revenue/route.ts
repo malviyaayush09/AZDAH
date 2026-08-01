@@ -22,12 +22,33 @@ export async function GET(req: NextRequest) {
 
   const { data: members } = await db
     .from('members')
-    .select('created_at, plan_id, razorpay_payment_id, membership_plans(name, price_paise, plan_category)')
+    .select('created_at, plan_id, razorpay_payment_id, razorpay_order_id, membership_plans(name, price_paise, plan_category)')
     .not('razorpay_payment_id', 'is', null)
     .order('created_at', { ascending: true });
 
   const all = members || [];
-  const priceOf = (m: (typeof all)[number]) => pick(m.membership_plans)?.price_paise || 0;
+
+  // Revenue must reflect what was ACTUALLY charged. A plan's price_paise is
+  // only a list price — a promo code changes what the member really paid, so
+  // reporting the list price overstates income. payment_intents.amount_paise is
+  // the server-authoritative amount the Razorpay order was created for.
+  const orderIds = all.map((m) => m.razorpay_order_id).filter(Boolean) as string[];
+  const paidByOrder = new Map<string, number>();
+  for (let i = 0; i < orderIds.length; i += 200) {
+    const { data: intents } = await db
+      .from('payment_intents')
+      .select('order_id, amount_paise')
+      .in('order_id', orderIds.slice(i, i + 200));
+    for (const it of intents || []) {
+      if (it.amount_paise != null) paidByOrder.set(it.order_id, it.amount_paise);
+    }
+  }
+
+  // Fall back to the list price only for legacy rows predating amount_paise.
+  const priceOf = (m: (typeof all)[number]) => {
+    const paid = m.razorpay_order_id ? paidByOrder.get(m.razorpay_order_id) : undefined;
+    return paid ?? pick(m.membership_plans)?.price_paise ?? 0;
+  };
   const nameOf = (m: (typeof all)[number]) => pick(m.membership_plans)?.name || 'Unknown';
   const catOf = (m: (typeof all)[number]) => pick(m.membership_plans)?.plan_category || 'other';
 

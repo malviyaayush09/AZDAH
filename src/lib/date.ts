@@ -14,3 +14,17 @@ export function todayIST(): string {
   const d = parts.find((p) => p.type === 'day')!.value;
   return `${y}-${m}-${d}`;
 }
+
+// A class's class_date + start_time are IST wall-clock values. Building a Date
+// from `${date}T${time}` with no offset makes the runtime read them in ITS OWN
+// zone — UTC on Vercel — so every class looked 5h30m later than it really is.
+// That let members book/cancel a class for 5.5h after it started, and blocked
+// the studio from marking attendance until 5.5h in. Always pin the IST offset.
+export function classStartsAt(classDate: string, startTime: string): Date {
+  const t = startTime.length === 5 ? `${startTime}:00` : startTime; // HH:MM -> HH:MM:SS
+  return new Date(`${classDate}T${t}+05:30`);
+}
+
+export function classHasStarted(classDate: string, startTime: string): boolean {
+  return classStartsAt(classDate, startTime).getTime() <= Date.now();
+}

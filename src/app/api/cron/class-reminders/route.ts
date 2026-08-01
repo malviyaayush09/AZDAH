@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { sendClassReminder } from '@/lib/whatsapp';
+import { classStartsAt } from '@/lib/date';
 
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('x-cron-secret');
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest) {
     if (!cls) continue;
 
     // Check if class is in the 1.5–2.5 hour window
-    const classStart = new Date(`${cls.class_date}T${cls.start_time}`);
+    const classStart = classStartsAt(cls.class_date, cls.start_time);
     const diffMs = classStart.getTime() - now.getTime();
     const diffMins = diffMs / 60000;
     if (diffMins < 90 || diffMins > 150) continue;

@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { todayIST, classHasStarted } from '@/lib/date';
 
 export async function GET(req: NextRequest) {
   const sessionToken = req.cookies.get('session')?.value;
@@ -13,7 +14,8 @@ export async function GET(req: NextRequest) {
   const { memberId } = session as { memberId: string };
 
   const db = getServiceClient();
-  const today = new Date().toISOString().split('T')[0];
+  // "Today" must be the studio's calendar day, not the server's UTC one.
+  const today = todayIST();
 
   // Which class categories does this member's pack grant access to?
   const { data: member } = await db
@@ -50,7 +52,11 @@ export async function GET(req: NextRequest) {
   const countRes = await Promise.all(classIds.map((id) => db.rpc('class_booking_count', { class_uuid: id })));
   const countMap = new Map(classIds.map((id, i) => [id, (countRes[i].data as number) || 0]));
 
-  const upcoming = (classRes.data || []).map((cls) => {
+  // Drop classes that have already started today — the date filter alone still
+  // listed this morning's finished sessions as bookable.
+  const upcoming = (classRes.data || [])
+    .filter((cls) => !classHasStarted(cls.class_date, cls.start_time))
+    .map((cls) => {
     const booking = bookingMap.get(cls.id);
     const bookedCount = (countMap.get(cls.id) as number) || 0;
     return {

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
 import { sendWaitlistPromoted } from '@/lib/whatsapp';
+import { classHasStarted } from '@/lib/date';
 
 export async function POST(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -35,24 +36,52 @@ export async function POST(req: NextRequest) {
     .select('class_date, start_time')
     .eq('id', booking.class_id)
     .single();
-  if (cls) {
-    const classDateTime = new Date(`${cls.class_date}T${cls.start_time}`);
-    if (classDateTime <= new Date()) {
-      return NextResponse.json({ error: 'Cannot cancel a class that has already started' }, { status: 400 });
-    }
+  if (cls && classHasStarted(cls.class_date, cls.start_time)) {
+    return NextResponse.json({ error: 'Cannot cancel a class that has already started' }, { status: 400 });
   }
 
   // Cancel the booking
   await db.from('bookings').update({ status: 'cancelled' }).eq('id', bookingId);
 
-  // Auto-promote first person on waitlist
-  const { data: next } = await db
+  // Auto-promote the first ELIGIBLE person on the waitlist. Promotion used to
+  // book whoever was first with no checks at all, so an expired, deactivated or
+  // pack-exhausted member could be handed a free class. Walk the queue in order
+  // and skip anyone who could not have booked this class themselves.
+  const { data: queue } = await db
     .from('waitlist')
-    .select('id, member_id, members(name, phone)')
+    .select('id, member_id, members(name, phone, is_active, plan_end, plan_start, plan_id)')
     .eq('class_id', booking.class_id)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .single();
+    .order('created_at', { ascending: true });
+
+  type WaitMember = { name: string; phone: string; is_active: boolean; plan_end: string | null; plan_start: string | null; plan_id: string | null };
+  let next: { id: string; member_id: string; members: WaitMember } | null = null;
+
+  for (const entry of queue || []) {
+    const raw = entry.members;
+    const m = (Array.isArray(raw) ? raw[0] : raw) as WaitMember | null;
+    if (!m || !m.is_active) continue;
+    if (m.plan_end && new Date(m.plan_end) < new Date()) continue;
+
+    if (m.plan_id) {
+      const { data: planData } = await db
+        .from('membership_plans')
+        .select('classes_included')
+        .eq('id', m.plan_id)
+        .single();
+      if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
+        const { count: usedCount } = await db
+          .from('bookings')
+          .select('*', { count: 'exact', head: true })
+          .eq('member_id', entry.member_id)
+          .eq('status', 'confirmed')
+          .gte('created_at', (m.plan_start || '1970-01-01') + 'T00:00:00Z');
+        if ((usedCount || 0) >= planData.classes_included) continue; // pack exhausted
+      }
+    }
+
+    next = { id: entry.id, member_id: entry.member_id, members: m };
+    break;
+  }
 
   if (next) {
     await db.from('bookings').upsert(
@@ -63,11 +92,10 @@ export async function POST(req: NextRequest) {
 
     // Notify promoted member via WhatsApp
     if (cls) {
-      const memberRaw = next.members;
-      const member = (Array.isArray(memberRaw) ? memberRaw[0] : memberRaw) as { name: string; phone: string } | null;
+      const member = next.members;
       // Re-fetch class title since we only selected class_date/start_time above
       const { data: fullCls } = await db.from('classes').select('title').eq('id', booking.class_id).single();
-      if (member && fullCls) {
+      if (fullCls) {
         sendWaitlistPromoted(member.phone, member.name, fullCls.title, cls.class_date, cls.start_time)
           .catch((e) => console.error('Waitlist promotion WA failed:', e));
       }

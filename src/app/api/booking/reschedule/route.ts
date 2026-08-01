@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
 import { sendRescheduleConfirmed } from '@/lib/whatsapp';
+import { classHasStarted } from '@/lib/date';
 
 export async function POST(req: NextRequest) {
   // Auth
@@ -49,11 +50,8 @@ export async function POST(req: NextRequest) {
     .select('class_date, start_time')
     .eq('id', oldBooking.class_id)
     .single();
-  if (oldClass) {
-    const oldClassDateTime = new Date(`${oldClass.class_date}T${oldClass.start_time}`);
-    if (oldClassDateTime <= new Date()) {
-      return NextResponse.json({ error: 'Cannot reschedule a class that has already started' }, { status: 400 });
-    }
+  if (oldClass && classHasStarted(oldClass.class_date, oldClass.start_time)) {
+    return NextResponse.json({ error: 'Cannot reschedule a class that has already started' }, { status: 400 });
   }
 
   // Validate new class
@@ -68,8 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Block reschedule to a class that has already started
-  const newClassDateTime = new Date(`${newClass.class_date}T${newClass.start_time}`);
-  if (newClassDateTime <= new Date()) {
+  if (classHasStarted(newClass.class_date, newClass.start_time)) {
     return NextResponse.json({ error: 'Cannot reschedule to a class that has already started' }, { status: 400 });
   }
 

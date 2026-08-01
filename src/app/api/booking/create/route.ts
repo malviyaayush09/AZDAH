@@ -5,6 +5,7 @@ import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
 import { sendBookingConfirmed } from '@/lib/whatsapp';
 import { checkRateLimit, recordRequest } from '@/lib/rate-limit';
+import { classHasStarted } from '@/lib/date';
 
 export async function POST(req: NextRequest) {
   // Auth
@@ -40,9 +41,8 @@ export async function POST(req: NextRequest) {
   if (cls.is_cancelled) return NextResponse.json({ error: 'Class is cancelled' }, { status: 400 });
   if (!member || !member.is_active) return NextResponse.json({ error: 'Membership inactive' }, { status: 403 });
 
-  // Check class hasn't already started
-  const classDateTime = new Date(`${cls.class_date}T${cls.start_time}`);
-  if (classDateTime < new Date()) {
+  // Check class hasn't already started (IST wall-clock — see lib/date.ts)
+  if (classHasStarted(cls.class_date, cls.start_time)) {
     return NextResponse.json({ error: 'This class has already started.' }, { status: 400 });
   }
 
