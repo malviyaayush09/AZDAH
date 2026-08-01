@@ -205,6 +205,8 @@ export default function AdminPage() {
     whatsapp_enabled?: boolean;
   };
   const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
+  // Per-day toggle for revealing cancelled classes in the calendar.
+  const [expandedCancelled, setExpandedCancelled] = useState<Record<string, boolean>>({});
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -949,17 +951,27 @@ export default function AdminPage() {
                             </div>
                           );
                         })}
-                        {/* Cancelled classes were only a near-invisible count, so
-                            there was no way to see WHICH class was cancelled.
-                            Show them dimmed + struck through, still clickable. */}
-                        {dayCancelled.map(cls => (
-                          <div key={cls.id} className="cbk" onClick={() => openClassModal(cls)}
-                            title="Cancelled — click for details"
-                            style={{ background:'rgba(248,113,113,.05)', border:'1px dashed rgba(248,113,113,.3)', borderRadius:7, padding:'7px 8px', opacity:.75 }}>
-                            <div style={{ fontSize:11, fontWeight:600, color:'#f87171', textDecoration:'line-through', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.title}</div>
-                            <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{fmtTime(cls.start_time)} · cancelled</div>
-                          </div>
-                        ))}
+                        {/* Cancelled classes: collapsed by default so they never
+                            bury the live ones, but legible and expandable —
+                            the old version was an unreadable count. */}
+                        {dayCancelled.length > 0 && (
+                          <>
+                            <button
+                              onClick={() => setExpandedCancelled(p => ({ ...p, [ds]: !p[ds] }))}
+                              style={{ width:'100%', padding:'4px 6px', background:'none', border:'none', color:MUTED, fontSize:10, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:4 }}>
+                              <span style={{ display:'inline-block', transform: expandedCancelled[ds] ? 'rotate(90deg)' : 'none', transition:'transform .15s' }}>›</span>
+                              {dayCancelled.length} cancelled
+                            </button>
+                            {expandedCancelled[ds] && dayCancelled.map(cls => (
+                              <div key={cls.id} className="cbk" onClick={() => openClassModal(cls)}
+                                title="Cancelled — click for details"
+                                style={{ background:'rgba(248,113,113,.04)', border:'1px dashed rgba(248,113,113,.25)', borderRadius:7, padding:'6px 8px', opacity:.7 }}>
+                                <div style={{ fontSize:10.5, fontWeight:600, color:'#f87171', textDecoration:'line-through', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.title}</div>
+                                <div style={{ fontSize:9.5, color:MUTED, marginTop:1 }}>{fmtTime(cls.start_time)}</div>
+                              </div>
+                            ))}
+                          </>
+                        )}
                       </div>
                     </div>
                   );
