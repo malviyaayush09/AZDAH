@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Settings, CalendarDays, Info, Eye, EyeOff, User } from 'lucide-react';
+import { Toast } from '@/components/Toast';
 
 type MemberInfo = {
   id: string; name: string; phone: string;
@@ -138,16 +139,18 @@ export default function DashboardPage() {
     }
   }
 
-  // Open the "Book a Class" tab AND scroll to it. Scrolling is the important
-  // half: 'book' is the default tab, so setTab alone is a no-op and the button
-  // looks broken when the class list is already rendered below the fold.
-  function goToBooking() {
-    setTab('book');
+  // Switch tab AND scroll the panel into view. Scrolling is the important half:
+  // the panel sits below the fold, and 'book' is the default tab, so setTab
+  // alone can be a no-op that makes the button look broken.
+  function goToTab(next: Tab) {
+    setTab(next);
     setMsg(null);
+    if (next === 'history') loadHistory();
     requestAnimationFrame(() => {
       bookingPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
+  const goToBooking = () => goToTab('book');
 
   async function loadHistory() {
     if (history.length) return;
@@ -300,13 +303,6 @@ export default function DashboardPage() {
 
       <div style={{maxWidth:1100,margin:'0 auto',padding:'24px 20px'}} className="dash-in">
 
-        {/* ── Toast ── */}
-        {msg&&(
-          <div style={{marginBottom:14,padding:'11px 14px',background:msg.ok?'rgba(74,222,128,.08)':'rgba(248,113,113,.08)',border:`1px solid ${msg.ok?'rgba(74,222,128,.25)':'rgba(248,113,113,.25)'}`,borderRadius:8,fontSize:13,color:msg.ok?'#4ade80':'#f87171',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            {msg.text}<button onClick={()=>setMsg(null)} style={{background:'none',border:'none',color:MUTED,cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
-          </div>
-        )}
-
         {/* ── GREETING ── */}
         <div style={{marginBottom:18}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',flexWrap:'wrap',gap:16}}>
@@ -343,7 +339,7 @@ export default function DashboardPage() {
                 <div style={{color:MUTED,fontSize:13,marginTop:4}}>{dateLabel(nextBooking.class_date,todayStr)} · {fmtTime(nextBooking.start_time)}{nextBooking.trainer_name?` · with ${nextBooking.trainer_name}`:''}</div>
               </div>
             </div>
-            <button onClick={()=>{setTab('my-bookings');setMsg(null);}}
+            <button onClick={()=>goToTab('my-bookings')}
               style={{background:'none',border:'1px solid rgba(245,240,232,.2)',color:CREAM,fontSize:12,fontWeight:600,padding:'10px 18px',borderRadius:6,cursor:'pointer'}}>
               Manage bookings
             </button>
@@ -457,7 +453,7 @@ export default function DashboardPage() {
           {/* Tabs */}
           <div ref={bookingPanelRef} style={{display:'flex',borderBottom:`1px solid ${BORDER}`,padding:'0 20px',scrollMarginTop:16}}>
             {([['book','Book a Class'],['my-bookings',`My Bookings${myBookings.length>0?' ('+myBookings.length+')':''}`],['history','History'],['profile','Profile']] as const).map(([k,l])=>(
-              <button key={k} className="tab-btn" onClick={()=>{setTab(k);setMsg(null);if(k==='history')loadHistory();}}
+              <button key={k} className="tab-btn" onClick={()=>{setTab(k);setMsg(null);if(k==='history')loadHistory();}} aria-current={tab===k?'page':undefined}
                 style={{padding:'14px 16px',fontSize:13,fontWeight:500,color:tab===k?ORANGE:MUTED,
                   background:'none',border:'none',borderBottom:tab===k?`2px solid ${ORANGE}`:'2px solid transparent',
                   marginBottom:-1,cursor:'pointer'}}>
@@ -574,7 +570,7 @@ export default function DashboardPage() {
             {tab==='my-bookings'&&(
               <>
                 <div style={{marginBottom:14,padding:'9px 14px',background:'rgba(255,255,255,.03)',border:`1px solid ${BORDER}`,borderRadius:8,fontSize:12,color:MUTED,display:'flex',alignItems:'center',gap:8}}>
-                  <Info size={13} strokeWidth={1.5} style={{flexShrink:0}} /> Cancellations are allowed up to 2 hours before class starts.
+                  <Info size={13} strokeWidth={1.5} style={{flexShrink:0}} /> You can cancel any time before the class starts — your class credit goes back to your pack.
                 </div>
                 {!member!.reschedule_used&&!rescheduleMode&&myBookings.length>0&&(
                   <div style={{marginBottom:16,padding:'10px 14px',background:'rgba(37,99,235,.08)',border:'1px solid rgba(37,99,235,.25)',borderRadius:8,fontSize:12,color:'#93c5fd'}}>
@@ -775,6 +771,8 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <Toast msg={msg} onClose={()=>setMsg(null)} />
     </main>
   );
 }

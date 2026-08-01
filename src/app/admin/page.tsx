@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send } from 'lucide-react';
+import { Toast } from '@/components/Toast';
 
 type Member = {
   id: string; name: string; phone: string;
@@ -848,14 +849,6 @@ export default function AdminPage() {
               )}
             </div>
 
-          </div>
-        )}
-
-        {/* ── Toast ── */}
-        {msg && (
-          <div style={{ marginBottom:14, padding:'10px 14px', background: msg.ok ? 'rgba(74,222,128,.08)' : 'rgba(248,113,113,.08)', border:`1px solid ${msg.ok ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.25)'}`, borderRadius:7, fontSize:13, color: msg.ok ? '#4ade80' : '#f87171', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            {msg.text}
-            <button onClick={() => setMsg(null)} style={{ background:'none', border:'none', color:MUTED, cursor:'pointer', fontSize:16 }}>×</button>
           </div>
         )}
 
@@ -1949,6 +1942,8 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      <Toast msg={msg} onClose={() => setMsg(null)} />
     </main>
   );
 }
