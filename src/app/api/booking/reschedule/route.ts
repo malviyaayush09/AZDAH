@@ -25,11 +25,23 @@ export async function POST(req: NextRequest) {
   // Check reschedule eligibility — double-check directly from DB, not just RPC
   const { data: memberData } = await db
     .from('members')
-    .select('reschedule_used_this_month')
+    .select('reschedule_used_this_month, is_active, is_frozen, plan_end, plan_id')
     .eq('id', memberId)
     .single();
   if (!memberData || memberData.reschedule_used_this_month) {
     return NextResponse.json({ error: 'You have already rescheduled once this month' }, { status: 400 });
+  }
+
+  // Reschedule previously checked only timing and capacity, so it was a way
+  // around every membership rule that booking/create enforces.
+  if (!memberData.is_active) {
+    return NextResponse.json({ error: 'Membership inactive' }, { status: 403 });
+  }
+  if (memberData.is_frozen) {
+    return NextResponse.json({ error: 'Your membership is currently frozen. Please contact the studio to resume it.' }, { status: 403 });
+  }
+  if (memberData.plan_end && new Date(memberData.plan_end) < new Date()) {
+    return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
   }
 
   // Validate old booking belongs to member
@@ -68,6 +80,24 @@ export async function POST(req: NextRequest) {
   // Block reschedule to a class that has already started
   if (classHasStarted(newClass.class_date, newClass.start_time)) {
     return NextResponse.json({ error: 'Cannot reschedule to a class that has already started' }, { status: 400 });
+  }
+
+  // Tier gate — the target class must be one the member's pack covers.
+  // Without this, someone on a cheaper pack could book a class they ARE
+  // entitled to and then reschedule into a premium one.
+  if (memberData.plan_id) {
+    const { data: planData } = await db
+      .from('membership_plans')
+      .select('allowed_categories')
+      .eq('id', memberData.plan_id)
+      .single();
+    if (planData?.allowed_categories && planData.allowed_categories.length && newClass.category
+        && !planData.allowed_categories.includes(newClass.category)) {
+      return NextResponse.json(
+        { error: 'That class is not included in your pack. Please pick one your pack covers.' },
+        { status: 403 }
+      );
+    }
   }
 
   // Check new class capacity

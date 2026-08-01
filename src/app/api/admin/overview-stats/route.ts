@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { todayIST } from '@/lib/date';
 
 export async function GET(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -12,7 +13,9 @@ export async function GET(req: NextRequest) {
   }
 
   const db = getServiceClient();
-  const today = new Date().toISOString().split('T')[0];
+  // Studio's calendar day, not the server's UTC one — otherwise "today's
+  // classes" is still showing yesterday until 05:30 IST.
+  const today = todayIST();
   const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
   const ago30Days = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
 
@@ -58,5 +61,8 @@ export async function GET(req: NextRequest) {
     },
     expiring_this_week: expiringRes.data || [],
     inactive_members: inactiveRes.data || [],
+    // Surfaced so the admin UI can say plainly that members are NOT being
+    // messaged automatically — otherwise it looks like they were notified.
+    whatsapp_enabled: process.env.WHATSAPP_ENABLED === 'true',
   });
 }

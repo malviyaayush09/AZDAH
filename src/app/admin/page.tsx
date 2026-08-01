@@ -202,6 +202,7 @@ export default function AdminPage() {
     today: { classes: number; expected_members: number; attended: number };
     expiring_this_week: { id: string; name: string; phone: string; plan_name: string; plan_end: string; days_remaining: number }[];
     inactive_members: { id: string; name: string; phone: string; plan_name: string; plan_end: string; created_at: string }[];
+    whatsapp_enabled?: boolean;
   };
   const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
 
@@ -753,6 +754,21 @@ export default function AdminPage() {
         <h1 style={{ fontFamily:SERIF, fontSize:32, fontWeight:800, color:CREAM, margin:'0 0 6px', lineHeight:1.05, letterSpacing:'-.01em' }}>Studio overview</h1>
         <p style={{ color:MUTED, fontSize:14, margin:'0 0 22px' }}>Members, bookings and revenue at a glance.</p>
 
+        {/* Automatic messaging is behind a kill switch. Without saying so, it
+            looks like members were notified when nothing was ever sent. */}
+        {overviewStats && overviewStats.whatsapp_enabled === false && (
+          <div style={{ marginBottom:16, padding:'11px 14px', background:'rgba(251,191,36,.07)', border:'1px solid rgba(251,191,36,.22)', borderRadius:8, fontSize:12.5, color:'#fbbf24', display:'flex', alignItems:'flex-start', gap:9 }}>
+            <MessageCircle size={14} strokeWidth={1.6} style={{ flexShrink:0, marginTop:1 }} />
+            <span style={{ lineHeight:1.5 }}>
+              <strong style={{ fontWeight:700 }}>Automatic WhatsApp is off.</strong>{' '}
+              <span style={{ color:'#d9bf86' }}>
+                Members are not messaged automatically — no welcome, booking, reminder or expiry messages are sent.
+                Use the WhatsApp buttons here to message people yourself, and read out new passwords from the screen.
+              </span>
+            </span>
+          </div>
+        )}
+
         {/* ── KPI Row ── */}
         {stats && (
           <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:16 }}>
@@ -895,7 +911,8 @@ export default function AdminPage() {
                   const isToday = ds === todayStr;
                   const dayClasses = classes.filter(c => c.class_date === ds && !c.is_cancelled)
                     .sort((a,b) => a.start_time.localeCompare(b.start_time));
-                  const cancelledCnt = classes.filter(c => c.class_date === ds && c.is_cancelled).length;
+                  const dayCancelled = classes.filter(c => c.class_date === ds && c.is_cancelled)
+                    .sort((a,b) => a.start_time.localeCompare(b.start_time));
                   return (
                     <div key={i}>
                       <div style={{ textAlign:'center', marginBottom:8, padding:'8px 4px', borderRadius:8, background: isToday ? `${ORANGE}12` : 'transparent', border: isToday ? `1px solid ${ORANGE}28` : '1px solid transparent' }}>
@@ -907,7 +924,7 @@ export default function AdminPage() {
                         </div>
                       </div>
                       <div style={{ display:'flex', flexDirection:'column', gap:6, minHeight:60 }}>
-                        {dayClasses.length === 0 && (
+                        {dayClasses.length === 0 && dayCancelled.length === 0 && (
                           <div style={{ height:40, display:'flex', alignItems:'center', justifyContent:'center', color:'#2A2118', fontSize:18 }}>·</div>
                         )}
                         {dayClasses.map(cls => {
@@ -932,9 +949,17 @@ export default function AdminPage() {
                             </div>
                           );
                         })}
-                        {cancelledCnt > 0 && (
-                          <div style={{ fontSize:10, color:'#3A2B1E', textAlign:'center', padding:'2px 0' }}>{cancelledCnt} cancelled</div>
-                        )}
+                        {/* Cancelled classes were only a near-invisible count, so
+                            there was no way to see WHICH class was cancelled.
+                            Show them dimmed + struck through, still clickable. */}
+                        {dayCancelled.map(cls => (
+                          <div key={cls.id} className="cbk" onClick={() => openClassModal(cls)}
+                            title="Cancelled — click for details"
+                            style={{ background:'rgba(248,113,113,.05)', border:'1px dashed rgba(248,113,113,.3)', borderRadius:7, padding:'7px 8px', opacity:.75 }}>
+                            <div style={{ fontSize:11, fontWeight:600, color:'#f87171', textDecoration:'line-through', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.title}</div>
+                            <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{fmtTime(cls.start_time)} · cancelled</div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   );
