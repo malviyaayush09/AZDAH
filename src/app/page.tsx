@@ -296,13 +296,22 @@ export default function HomePage() {
       setPayLoading(false);
       return;
     }
+
+    // Required: it's where the Razorpay receipt goes, and with WhatsApp off
+    // it's the only way to reach a member without phoning them.
+    const trimmedEmail = form.email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmedEmail)) {
+      setCheckoutError('Please enter a valid email address.');
+      setPayLoading(false);
+      return;
+    }
     const fullPhone = `91${rawPhone}`;
 
     try {
       const orderRes = await fetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: selectedPlan.id, phone: fullPhone, name: trimmedName, email: form.email, promoCode: form.promoCode || undefined }),
+        body: JSON.stringify({ planId: selectedPlan.id, phone: fullPhone, name: trimmedName, email: trimmedEmail, promoCode: form.promoCode || undefined }),
       });
       const order = await orderRes.json();
       if (orderRes.status === 409) {
@@ -1037,9 +1046,10 @@ export default function HomePage() {
                     <p style={{ color: FAINT, fontSize: 11, marginTop: 5 }}>Your login credentials will be shown on the next screen — save them.</p>
                   </div>
                   <div>
-                    <label style={{ display: 'block', color: MUTED, fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 7 }}>Email <span style={{ opacity: 0.5 }}>(optional)</span></label>
-                    <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@email.com"
+                    <label style={{ display: 'block', color: MUTED, fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 7 }}>Email</label>
+                    <input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="you@email.com"
                       style={{ width: '100%', background: DARK, border: '1px solid rgba(241,233,218,0.14)', borderRadius: 2, padding: '12px 14px', color: CREAM, fontSize: 14, outline: 'none' }} />
+                    <p style={{ color: FAINT, fontSize: 11, marginTop: 5 }}>Your payment receipt is sent here.</p>
                   </div>
                 </div>
 

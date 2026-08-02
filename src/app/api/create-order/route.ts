@@ -14,6 +14,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'planId, phone, and name required' }, { status: 400 });
   }
 
+  // Email is required: it's where Razorpay sends the receipt, and with
+  // WhatsApp switched off it's the only automatic way to reach a member.
+  const cleanEmail = typeof email === 'string' ? email.trim() : '';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(cleanEmail) || cleanEmail.length > 120) {
+    return NextResponse.json({ error: 'A valid email address is required' }, { status: 400 });
+  }
+
   // Phone format validation
   const cleanPhone = String(phone).trim().replace(/\D/g, '');
   if (!/^\d{10,15}$/.test(cleanPhone)) {
@@ -120,7 +127,7 @@ export async function POST(req: NextRequest) {
     order_id: order.id,
     phone,
     name,
-    email: email || null,
+    email: cleanEmail,
     plan_id: planId,
     amount_paise: finalAmount,
     status: 'pending',

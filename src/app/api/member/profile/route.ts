@@ -30,7 +30,9 @@ export async function PATCH(req: NextRequest) {
   }
   const { memberId } = session as { memberId: string };
 
-  const { name, email } = await req.json();
+  const parsed = await req.json().catch(() => null);
+  if (!parsed) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  const { name, email } = parsed;
 
   if (name !== undefined) {
     const trimmed = String(name).trim();
@@ -38,9 +40,18 @@ export async function PATCH(req: NextRequest) {
     if (/\d/.test(trimmed)) return NextResponse.json({ error: 'Name should not contain numbers' }, { status: 400 });
   }
 
+  // Email was accepted unvalidated and could be blanked out entirely, which
+  // throws away the only automatic contact channel while WhatsApp is off.
+  if (email !== undefined) {
+    const trimmedEmail = String(email).trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(trimmedEmail) || trimmedEmail.length > 120) {
+      return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 });
+    }
+  }
+
   const updates: Record<string, string> = {};
   if (name) updates.name = String(name).trim();
-  if (email !== undefined) updates.email = String(email).trim() || '';
+  if (email !== undefined) updates.email = String(email).trim();
 
   const db = getServiceClient();
   const { error } = await db.from('members').update(updates).eq('id', memberId);
