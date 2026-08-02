@@ -20,7 +20,7 @@ type RazorpayOptions = {
   name: string;
   description: string;
   handler: (r: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => void;
-  prefill?: { contact?: string; name?: string };
+  prefill?: { contact?: string; name?: string; email?: string };
   theme?: { color?: string };
   modal?: { ondismiss?: () => void };
 };
@@ -330,7 +330,9 @@ export default function HomePage() {
         currency: 'INR',
         name: 'AZDAH Fitness',
         description: `${selectedPlan.name} Membership`,
-        prefill: { contact: rawPhone, name: form.name },
+        // Email must be passed here or Razorpay has no address to send the
+        // customer receipt to, however the dashboard setting is configured.
+        prefill: { contact: rawPhone, name: trimmedName, email: trimmedEmail },
         theme: { color: ORANGE },
         handler: async (response) => {
           const verifyRes = await fetch('/api/verify-payment', {
