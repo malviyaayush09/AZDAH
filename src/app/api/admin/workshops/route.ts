@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 import { todayIST } from '@/lib/date';
 
 function isAdmin(session: object | null) {
@@ -131,5 +132,6 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  logAudit((session as { phone: string }).phone, 'workshop_created', 'workshop', data?.id, { title: data?.title }).catch(() => {});
   return NextResponse.json({ success: true, workshop: data });
 }

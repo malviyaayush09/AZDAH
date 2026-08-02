@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -12,7 +13,8 @@ async function requireAdmin(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { memberId: string } }) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { amount_paise, reason } = await req.json() as { amount_paise?: number; reason?: string };
 
@@ -116,6 +118,14 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
     update.sessions_valid_from = new Date().toISOString();
   }
   await db.from('members').update(update).eq('id', params.memberId);
+
+  logAudit((admin as { phone: string }).phone, 'member_refunded', 'member', params.memberId, {
+    member: member.name,
+    amount_paise: refundAmount,
+    full_refund: refundAmount === refundableAmount,
+    razorpay_refund_id: refund.id,
+    reason: reason || null,
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true, refund_id: refund.id, amount: refund.amount });
 }

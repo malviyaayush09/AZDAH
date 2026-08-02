@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 import { classHasStarted } from '@/lib/date';
 
 async function requireAdmin(req: NextRequest) {
@@ -14,7 +15,8 @@ async function requireAdmin(req: NextRequest) {
 
 // PATCH /api/admin/classes/[classId]/attendance — mark booking as attended/not
 export async function PATCH(req: NextRequest) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { bookingId, attended } = await req.json();
   if (!bookingId || attended === undefined) {
@@ -42,6 +44,8 @@ export async function PATCH(req: NextRequest) {
 
   const { error } = await db.from('bookings').update({ attended }).eq('id', bookingId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  logAudit((admin as { phone: string }).phone, attended ? 'attendance_marked' : 'attendance_unmarked', 'booking', bookingId).catch(() => {});
 
   return NextResponse.json({ success: true });
 }

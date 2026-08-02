@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -29,6 +30,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   const db = getServiceClient();
   const { error } = await db.from('class_templates').update(update).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  logAudit((session as { phone: string }).phone, 'template_updated', 'class_template', params.id).catch(() => {});
   return NextResponse.json({ success: true });
 }
 

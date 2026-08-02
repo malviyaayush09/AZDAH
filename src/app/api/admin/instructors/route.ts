@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession, hashPassword, generatePassword } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -11,7 +12,8 @@ async function requireAdmin(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const db = getServiceClient();
   const { data, error } = await db
@@ -24,7 +26,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
@@ -60,5 +63,6 @@ export async function POST(req: NextRequest) {
   await db.from('classes').update({ instructor_id: created.id }).eq('trainer_name', trimmedName).is('instructor_id', null);
 
   // Return the generated password once so the admin can share it.
+  logAudit((admin as { phone: string }).phone, 'instructor_created', 'instructor', created?.id, { name: created?.name }).catch(() => {});
   return NextResponse.json({ success: true, instructor: created, password: rawPassword });
 }

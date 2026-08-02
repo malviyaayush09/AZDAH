@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -11,7 +12,8 @@ async function requireAdmin(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { memberId: string } }) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
@@ -31,6 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
     await db.from('members')
       .update({ is_frozen: true })
       .eq('id', params.memberId);
+    logAudit((admin as { phone: string }).phone, 'membership_frozen', 'member', params.memberId).catch(() => {});
     return NextResponse.json({ ok: true, status: 'frozen' });
   }
 
@@ -52,6 +55,9 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
       })
       .eq('id', params.memberId);
 
+    logAudit((admin as { phone: string }).phone, 'membership_unfrozen', 'member', params.memberId, {
+      days_extended: days, new_plan_end: newEnd,
+    }).catch(() => {});
     return NextResponse.json({ ok: true, status: 'unfrozen', new_plan_end: newEnd });
   }
 

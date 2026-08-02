@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { todayIST } from '@/lib/date';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 import { sendAdminBroadcast } from '@/lib/whatsapp';
 
 async function requireAdmin(req: NextRequest) {
@@ -13,7 +14,8 @@ async function requireAdmin(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { message, audience } = await req.json() as { message: string; audience: 'all' | 'active' | 'expiring' };
 
@@ -52,5 +54,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  logAudit((admin as { phone: string }).phone, 'broadcast_sent', undefined, undefined, { audience, sent, failed }).catch(() => {});
   return NextResponse.json({ ok: true, sent, failed, total: recipients?.length ?? 0 });
 }

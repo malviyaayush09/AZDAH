@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 import { todayIST } from '@/lib/date';
 
 async function requireAdmin(req: NextRequest) {
@@ -22,7 +23,8 @@ function nextOccurrence(fromDate: Date, targetDow: number): Date {
 }
 
 export async function POST(req: NextRequest) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const parsed = await req.json().catch(() => null);
   if (!parsed) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
@@ -90,5 +92,6 @@ export async function POST(req: NextRequest) {
   const { error } = await db.from('classes').insert(classes);
   if (error) return NextResponse.json({ error: 'Failed to create classes' }, { status: 500 });
 
+  logAudit((admin as { phone: string }).phone, 'recurring_classes_created', 'class', undefined, { title, created: classes.length, weeks }).catch(() => {});
   return NextResponse.json({ ok: true, created: classes.length });
 }

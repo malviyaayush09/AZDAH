@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 export async function GET(req: NextRequest) {
   const session = await verifySession(req.cookies.get('session')?.value || '');
@@ -61,5 +62,6 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  logAudit((session as { phone: string }).phone, 'template_created', 'class_template', data?.id, { title: data?.title }).catch(() => {});
   return NextResponse.json({ success: true, template: data });
 }

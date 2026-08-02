@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -11,7 +12,8 @@ async function requireAdmin(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { classId: string } }) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getServiceClient();
   const { error } = await db.from('classes').update({ is_cancelled: true }).eq('id', params.classId);
@@ -29,6 +31,10 @@ export async function POST(req: NextRequest, { params }: { params: { classId: st
 
   // Nobody can be promoted into a cancelled class.
   await db.from('waitlist').delete().eq('class_id', params.classId);
+
+  logAudit((admin as { phone: string }).phone, 'class_cancelled', 'class', params.classId, {
+    bookings_released: released?.length ?? 0,
+  }).catch(() => {});
 
   return NextResponse.json({ success: true, released: released?.length ?? 0 });
 }

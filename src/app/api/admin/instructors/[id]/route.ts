@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession, hashPassword, generatePassword } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -15,7 +16,8 @@ async function requireAdmin(req: NextRequest) {
 type Ctx = { params: { id: string } };
 
 export async function PATCH(req: NextRequest, { params }: Ctx) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const { id } = params;
   if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
@@ -31,6 +33,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const hash = await hashPassword(rawPassword);
     const { error } = await db.from('instructors').update({ password_hash: hash }).eq('id', id);
     if (error) return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    // Never log the password itself.
+    logAudit((admin as { phone: string }).phone, 'instructor_password_reset', 'instructor', id, { name: inst.name }).catch(() => {});
     return NextResponse.json({ ok: true, password: rawPassword, name: inst.name, phone: inst.phone });
   }
 
@@ -38,6 +42,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (typeof body.is_active === 'boolean') {
     const { error } = await db.from('instructors').update({ is_active: body.is_active }).eq('id', id);
     if (error) return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    logAudit((admin as { phone: string }).phone, body.is_active ? 'instructor_activated' : 'instructor_deactivated', 'instructor', id).catch(() => {});
     return NextResponse.json({ ok: true });
   }
 
@@ -45,7 +50,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Ctx) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const { id } = params;
   if (!UUID_RE.test(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 });
 
@@ -55,5 +61,6 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   await db.from('classes').update({ instructor_id: null }).eq('instructor_id', id);
   const { error } = await db.from('instructors').delete().eq('id', id);
   if (error) return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
+  logAudit((admin as { phone: string }).phone, 'instructor_deleted', 'instructor', id).catch(() => {});
   return NextResponse.json({ ok: true });
 }

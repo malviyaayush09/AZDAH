@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -16,7 +17,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: { classId: string } }
 ) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getServiceClient();
   const { data: cls } = await db
@@ -43,5 +45,6 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  logAudit((admin as { phone: string }).phone, 'class_duplicated', 'class', newCls.id, { from: params.classId, date: nextDateStr }).catch(() => {});
   return NextResponse.json({ success: true, newClassId: newCls.id, newDate: nextDateStr });
 }

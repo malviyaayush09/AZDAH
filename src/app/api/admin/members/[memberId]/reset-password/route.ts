@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession, hashPassword, generatePassword } from '@/lib/auth';
 import { sendPasswordReset } from '@/lib/whatsapp';
+import { logAudit } from '@/lib/audit';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -12,7 +13,8 @@ async function requireAdmin(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest, { params }: { params: { memberId: string } }) {
-  if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(req);
+  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const db = getServiceClient();
   const { data: member } = await db
@@ -34,6 +36,11 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
     .eq('id', params.memberId);
 
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 });
+
+  // Never log the password itself.
+  logAudit((admin as { phone: string }).phone, 'member_password_reset', 'member', params.memberId, {
+    member: member.name,
+  }).catch(() => {});
 
   // Send via WhatsApp (fire & forget). Also return the password so the admin
   // can relay it manually — critical while the WhatsApp API isn't live yet.
