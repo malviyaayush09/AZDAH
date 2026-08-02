@@ -208,6 +208,13 @@ export default function AdminPage() {
   // Per-day toggle for revealing cancelled classes in the calendar.
   const [expandedCancelled, setExpandedCancelled] = useState<Record<string, boolean>>({});
 
+  // Membership payments captured by Razorpay where no member was ever created.
+  type MembershipOrphan = {
+    order_id: string; payment_id: string | null; name: string; phone: string;
+    email: string | null; amount_paise: number | null; created_at: string; reason: string;
+  };
+  const [memberOrphans, setMemberOrphans] = useState<MembershipOrphan[]>([]);
+
   useEffect(() => { fetchAll(); }, []);
 
   // Count-up animation for the overview stat cards (runs once stats arrive)
@@ -245,6 +252,13 @@ export default function AdminPage() {
     setClasses(cData.classes || []);
     setOverviewStats(ovData.today ? ovData : null);
     setLoading(false);
+
+    // Checked separately: it calls out to Razorpay per pending order, so it
+    // must not hold up the dashboard render.
+    fetch('/api/admin/orphaned-payments')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.orphans) setMemberOrphans(d.orphans); })
+      .catch(() => {});
   }
 
   async function addClass(e: React.FormEvent) {
@@ -755,6 +769,37 @@ export default function AdminPage() {
         {/* ── Heading ── */}
         <h1 style={{ fontFamily:SERIF, fontSize:32, fontWeight:800, color:CREAM, margin:'0 0 6px', lineHeight:1.05, letterSpacing:'-.01em' }}>Studio overview</h1>
         <p style={{ color:MUTED, fontSize:14, margin:'0 0 22px' }}>Members, bookings and revenue at a glance.</p>
+
+        {/* Money taken, nothing delivered. Highest-priority thing on the page. */}
+        {memberOrphans.length > 0 && (
+          <div style={{ marginBottom:16, padding:'14px 16px', background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.35)', borderRadius:10 }}>
+            <div style={{ fontSize:13.5, fontWeight:700, color:'#f87171', marginBottom:4 }}>
+              ⚠ {memberOrphans.length} paid membership{memberOrphans.length !== 1 ? 's' : ''} with no account created
+            </div>
+            <div style={{ fontSize:12, color:'#d99', marginBottom:12, lineHeight:1.5 }}>
+              Razorpay captured the money but the member was never set up — usually the browser closed mid-payment.
+              Either create the member manually and share their login, or refund the payment in Razorpay.
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {memberOrphans.map(o => (
+                <div key={o.order_id} style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:10, padding:'9px 11px', background:'rgba(0,0,0,.25)', border:`1px solid ${BORDER}`, borderRadius:7 }}>
+                  <span style={{ fontSize:12.5, fontWeight:600, color:CREAM }}>{o.name}</span>
+                  <span style={{ fontSize:12, color:MUTED }}>{o.phone}</span>
+                  {o.amount_paise != null && (
+                    <span style={{ fontSize:12, fontWeight:700, color:'#fbbf24' }}>₹{(o.amount_paise/100).toLocaleString('en-IN')}</span>
+                  )}
+                  <span style={{ fontSize:11, color:MUTED }}>{fmtDate(o.created_at)}</span>
+                  <span style={{ fontSize:10.5, color:MUTED, fontFamily:'monospace' }}>{o.payment_id}</span>
+                  <a href={`https://wa.me/${o.phone.replace(/\D/g,'')}?text=${encodeURIComponent(`Hi ${o.name.split(' ')[0]}, we received your payment for AZDAH but your account didn't get created automatically. We're sorting it out right now — sorry for the trouble!`)}`}
+                    target="_blank" rel="noopener"
+                    style={{ marginLeft:'auto', fontSize:11, fontWeight:600, color:'#4ade80', border:'1px solid rgba(74,222,128,.3)', borderRadius:5, padding:'5px 10px', textDecoration:'none' }}>
+                    WhatsApp them
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Automatic messaging is behind a kill switch. Without saying so, it
             looks like members were notified when nothing was ever sent. */}
