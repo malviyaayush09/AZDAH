@@ -167,6 +167,8 @@ export default function AdminPage() {
   const [broadcastBusy, setBroadcastBusy] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ sent: number; failed: number } | null>(null);
   const [recurring, setRecurring] = useState({ title: '', trainer_name: '', days_of_week: [] as number[], start_time: '', end_time: '', capacity: '20', weeks: '4' });
+  // Separate from `recurring` so the generic text-input loop below is untouched.
+  const [recurringCategory, setRecurringCategory] = useState('pole_regular');
   const [recurringSaving, setRecurringSaving] = useState(false);
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [promoLoading, setPromoLoading] = useState(false);
@@ -449,7 +451,7 @@ export default function AdminPage() {
     setRecurringSaving(true); setMsg(null);
     const res = await fetch('/api/admin/classes/recurring', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...recurring, capacity: parseInt(recurring.capacity), weeks: parseInt(recurring.weeks) }),
+      body: JSON.stringify({ ...recurring, capacity: parseInt(recurring.capacity), weeks: parseInt(recurring.weeks), category: recurringCategory }),
     });
     const data = await res.json();
     setRecurringSaving(false);
@@ -1384,6 +1386,17 @@ export default function AdminPage() {
                       );
                     })}
                   </div>
+                </div>
+                <div>
+                  <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>Category *</label>
+                  <select value={recurringCategory} onChange={e => setRecurringCategory(e.target.value)}
+                    style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }}>
+                    <option value="pole_regular">Pole (Regular)</option>
+                    <option value="pole_nimisha">Pole (Nimisha)</option>
+                    <option value="strength">Strength</option>
+                    <option value="mobility">Mobility</option>
+                    <option value="self_practice">Self Practice</option>
+                  </select>
                 </div>
                 <button type="submit" disabled={recurringSaving}
                   style={{ marginTop:4, padding:'13px', background: recurringSaving ? MUTED : ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:600, cursor: recurringSaving ? 'not-allowed' : 'pointer' }}>

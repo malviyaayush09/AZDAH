@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { todayIST } from '@/lib/date';
 
 async function requireAdmin(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -11,19 +12,22 @@ async function requireAdmin(req: NextRequest) {
 }
 
 // Day-of-week numbers: 0=Sun, 1=Mon, ..., 6=Sat
+// Dates here are UTC-anchored calendar days (see todayIST use below), so all
+// arithmetic must use the UTC accessors to stay on the same day.
 function nextOccurrence(fromDate: Date, targetDow: number): Date {
   const d = new Date(fromDate);
-  d.setHours(0, 0, 0, 0);
-  const delta = (targetDow - d.getDay() + 7) % 7 || 7;
-  d.setDate(d.getDate() + delta);
+  const delta = (targetDow - d.getUTCDay() + 7) % 7 || 7;
+  d.setUTCDate(d.getUTCDate() + delta);
   return d;
 }
 
 export async function POST(req: NextRequest) {
   if (!await requireAdmin(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { title, trainer_name, days_of_week, start_time, end_time, capacity, weeks } =
-    await req.json() as {
+  const parsed = await req.json().catch(() => null);
+  if (!parsed) return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  const { title, trainer_name, days_of_week, start_time, end_time, capacity, weeks, category, instructor_id } =
+    parsed as {
       title: string;
       trainer_name?: string;
       days_of_week: number[]; // 0-6
@@ -31,6 +35,8 @@ export async function POST(req: NextRequest) {
       end_time: string;
       capacity: number;
       weeks: number; // how many weeks to generate (1–12)
+      category?: string;
+      instructor_id?: string;
     };
 
   if (!title || !days_of_week?.length || !start_time || !end_time || !capacity || !weeks) {
@@ -39,13 +45,30 @@ export async function POST(req: NextRequest) {
   if (weeks < 1 || weeks > 12) {
     return NextResponse.json({ error: 'Weeks must be 1–12' }, { status: 400 });
   }
+  if (!days_of_week.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {
+    return NextResponse.json({ error: 'Invalid day of week' }, { status: 400 });
+  }
+  if (!/^\d{2}:\d{2}/.test(String(start_time)) || !/^\d{2}:\d{2}/.test(String(end_time))) {
+    return NextResponse.json({ error: 'Invalid time' }, { status: 400 });
+  }
+  if (String(end_time).slice(0, 5) <= String(start_time).slice(0, 5)) {
+    return NextResponse.json({ error: 'End time must be after the start time' }, { status: 400 });
+  }
+  const cap = parseInt(String(capacity), 10);
+  if (!Number.isFinite(cap) || cap < 1 || cap > 200) {
+    return NextResponse.json({ error: 'Capacity must be between 1 and 200' }, { status: 400 });
+  }
 
-  const today = new Date();
-  const classes: { title: string; trainer_name: string | null; class_date: string; start_time: string; end_time: string; capacity: number }[] = [];
+  // Anchor to the studio's calendar day. Using the server's UTC "today" meant
+  // that before 05:30 IST the whole series was generated from the wrong day.
+  const [ty, tm, td] = todayIST().split('-').map(Number);
+  const today = new Date(Date.UTC(ty, tm - 1, td));
+
+  const classes: { title: string; trainer_name: string | null; class_date: string; start_time: string; end_time: string; capacity: number; category: string | null; instructor_id: string | null }[] = [];
 
   for (let w = 0; w < weeks; w++) {
     const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() + w * 7);
+    weekStart.setUTCDate(today.getUTCDate() + w * 7);
     for (const dow of days_of_week) {
       const date = nextOccurrence(w === 0 ? today : weekStart, dow);
       classes.push({
@@ -54,7 +77,11 @@ export async function POST(req: NextRequest) {
         class_date: date.toISOString().split('T')[0],
         start_time,
         end_time,
-        capacity: parseInt(String(capacity)),
+        capacity: cap,
+        // Without a category these classes are invisible to tier-restricted
+        // members, exactly like the Add Class bug.
+        category: category || null,
+        instructor_id: instructor_id || null,
       });
     }
   }
