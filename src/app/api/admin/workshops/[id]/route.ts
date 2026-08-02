@@ -69,6 +69,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const db = getServiceClient();
   const { data, error } = await db.from('workshops').update(patch).eq('id', params.id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  logAudit((session as { phone: string }).phone, 'workshop_updated', 'workshop', params.id, {
+    title: data?.title, changed: Object.keys(patch),
+  }).catch(() => {});
   return NextResponse.json({ success: true, workshop: data });
 }
 
@@ -94,5 +97,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const { error } = await db.from('workshops').delete().eq('id', params.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  logAudit((session as { phone: string }).phone, 'workshop_deleted', 'workshop', params.id).catch(() => {});
   return NextResponse.json({ success: true });
 }
