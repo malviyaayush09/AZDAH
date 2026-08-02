@@ -730,7 +730,7 @@ export default function DashboardPage() {
                 </h3>
                 <p style={{color:MUTED,fontSize:12,marginTop:3}}>
                   {member?.must_change_password
-                    ? 'Please set a new password before continuing. The temporary password was sent to you via WhatsApp.'
+                    ? 'Please set a new password before continuing.'
                     : 'Choose a strong password (min 8 characters)'}
                 </p>
               </div>
