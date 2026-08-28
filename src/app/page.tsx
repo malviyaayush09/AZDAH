@@ -468,7 +468,7 @@ export default function HomePage() {
 
             {/* Brand pillars */}
             <div className="stats-row" style={{ display: 'flex', gap: 40, marginTop: 56, paddingTop: 40, borderTop: '1px solid rgba(241,233,218,0.1)' }}>
-              {[['Pole', 'Art · Fitness · Exotic'], ['All levels', 'Beginners welcome'], ['Zero', 'Judgment or comparison']].map(([num, label]) => (
+              {[['Pole', 'Art. Strength. Expression.'], ['All levels', 'Beginner, Intermediate and Advanced'], ['For All Bodies', 'Sports science backed progress and no judgement.']].map(([num, label]) => (
                 <div key={label}>
                   <div style={{ fontFamily: SERIF, fontSize: 28, fontWeight: 800, color: CREAM, lineHeight: 1.1 }}>{num}</div>
                   <div style={{ color: MUTED, fontSize: 12, marginTop: 6, letterSpacing: '0.04em' }}>{label}</div>
@@ -541,7 +541,7 @@ export default function HomePage() {
           {/* Closing line */}
           <div style={{ marginTop: 48, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 24, borderTop: '1px solid rgba(21,17,13,0.12)', paddingTop: 40 }}>
             <p style={{ color: 'rgba(21,17,13,0.75)', fontSize: 15.5, lineHeight: 1.7, margin: 0, maxWidth: 560 }}>
-              Professional equipment. Expert coaching. A community that celebrates every victory — from your first spin to your first invert.
+              Professional equipment. XPERT certified instructors. A community that celebrates every victory — from your first spin to your first invert.
             </p>
             <p style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 18, color: ORANGE, margin: 0, maxWidth: 340, lineHeight: 1.5 }}>
               It isn&apos;t important that you just started — it&apos;s important that you started at all.
@@ -570,7 +570,7 @@ export default function HomePage() {
             {[
               ['01', 'Sensual', 'Sensuality isn’t something you perform. It’s something you reclaim.'],
               ['02', 'Strong', 'Real strength isn’t only measured by muscles — it’s being able to pull your own weight up. Pole builds full-body strength, plus the courage, consistency and confidence to try again.'],
-              ['03', 'Free', 'Move because it feels good. Dance because you can. Take up space without asking permission.'],
+              ['03', 'Poised', 'Move because it feels good. Dance because you can. Take up space without asking permission.'],
             ].map(([num, title, text]) => (
               <div key={title} style={{ display: 'flex', gap: 32, padding: '28px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
                 <span style={{ fontSize: 11, color: ORANGE, letterSpacing: '.08em', minWidth: 20, flexShrink: 0, paddingTop: 2 }}>{num}</span>

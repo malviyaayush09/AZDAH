@@ -34,7 +34,7 @@ export const OFFERINGS = [
 export const PHILOSOPHY = [
   ['01', 'Sensual', 'Sensuality isn’t something you perform. It’s something you reclaim.'],
   ['02', 'Strong', 'Real strength isn’t only measured by muscles — it’s being able to pull your own weight up. Pole builds full-body strength, plus the courage, consistency and confidence to try again.'],
-  ['03', 'Free', 'Move because it feels good. Dance because you can. Take up space without asking permission.'],
+  ['03', 'Poised', 'Move because it feels good. Dance because you can. Take up space without asking permission.'],
 ] as const;
 
 export const FAQS = [
