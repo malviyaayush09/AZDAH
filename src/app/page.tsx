@@ -26,6 +26,9 @@ type RazorpayOptions = {
 };
 
 const SERIF = 'var(--font-bodoni), Georgia, "Times New Roman", serif';
+const MAPS_QUERY = '10%2F3%2C+Jeevan+Bima+Nagar+Main+Rd%2C+LIC+Colony%2C+Sector+11%2C+New+Thippasandra%2C+Bengaluru%2C+Karnataka+560075';
+const MAPS_LINK = `https://www.google.com/maps?q=${MAPS_QUERY}`;
+const MAPS_EMBED = `https://www.google.com/maps?q=${MAPS_QUERY}&output=embed`;
 const DARK = '#15110D';
 const CREAM = '#F1E9DA';
 const ORANGE = '#F83433';
@@ -852,6 +855,33 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Structured data - helps Google associate AZDAH with the new address */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify({
+          '@context': 'https://schema.org',
+          '@type': 'SportsActivityLocation',
+          name: 'AZDAH',
+          description: 'Women and queer-first pole studio in Bengaluru.',
+          url: 'https://www.azdah.in',
+          telephone: '+91-85880-56122',
+          email: 'hello@azdahfit.in',
+          hasMap: MAPS_LINK,
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: 'AU Small Finance Bank (3rd floor), 10/3, Jeevan Bima Nagar Main Rd, LIC Colony, Sector 11, New Thippasandra',
+            addressLocality: 'Bengaluru',
+            addressRegion: 'Karnataka',
+            postalCode: '560075',
+            addressCountry: 'IN',
+          },
+          openingHoursSpecification: [
+            { '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], opens: '06:00', closes: '21:00' },
+            { '@type': 'OpeningHoursSpecification', dayOfWeek: 'Sunday', opens: '07:00', closes: '14:00' },
+          ],
+        }) }}
+      />
+
       {/* ── CONTACT ── */}
       <section id="contact" style={{ background: DARK, padding: '100px 28px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -860,7 +890,7 @@ export default function HomePage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 60 }} className="phil-grid">
             <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
               {[
-                { label: 'Studio', text: '549/3, 9th A Main, Indiranagar\nBangalore — 560038\n(Left of Copper + Clove, PCI Gases building)' },
+                { label: 'Studio', text: 'AZDAH, AU Small Finance Bank (3rd floor)\n10/3, Jeevan Bima Nagar Main Rd\nLIC Colony, Sector 11, New Thippasandra\nBengaluru, Karnataka 560075' },
                 { label: 'Hours', text: 'Mon – Sat: 6:00 AM – 9:00 PM\nSunday: 7:00 AM – 2:00 PM' },
                 { label: 'WhatsApp', text: '+91 85880 56122' },
                 { label: 'Email', text: 'hello@azdahfit.in' },
@@ -871,30 +901,34 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            {/* Map card */}
-            <a
-              href="https://maps.google.com/?q=549%2F3+9th+A+Main+Indiranagar+Bangalore+560038"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ textDecoration: 'none', display: 'block' }}
-            >
-              <div style={{ background: CARD, borderRadius: 2, minHeight: 320, border: '1px solid rgba(241,233,218,0.1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 40, cursor: 'pointer', transition: 'border-color 0.2s' }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = 'rgba(248,52,51,0.4)')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(241,233,218,0.1)')}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="rgba(248,52,51,0.15)" stroke={ORANGE} strokeWidth="1.2"/>
-                  <circle cx="12" cy="9" r="2.5" fill={ORANGE} />
-                </svg>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ color: CREAM, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>549/3, 9th A Main</div>
-                  <div style={{ color: MUTED, fontSize: 13, lineHeight: 1.6 }}>Indiranagar, Bangalore — 560038<br />Left of Copper + Clove, PCI Gases building</div>
+            {/* Map card - embedded Google map, no API key required */}
+            <div style={{ background: CARD, borderRadius: 2, border: '1px solid rgba(241,233,218,0.1)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <iframe
+                src={MAPS_EMBED}
+                title="AZDAH studio location on Google Maps"
+                width="100%"
+                height="300"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+                style={{ border: 0, display: 'block', minHeight: 300, filter: 'invert(90%) hue-rotate(180deg) saturate(0.75) contrast(0.92)' }}
+              />
+              <div style={{ padding: '22px 24px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <div style={{ color: CREAM, fontSize: 15, fontWeight: 600, marginBottom: 6 }}>10/3, Jeevan Bima Nagar Main Rd</div>
+                  <div style={{ color: MUTED, fontSize: 13, lineHeight: 1.6 }}>AU Small Finance Bank building, 3rd floor<br />New Thippasandra, Bengaluru — 560075</div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: ORANGE, color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 20px', borderRadius: 2 }}>
+                <a
+                  href={MAPS_LINK}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ alignSelf: 'flex-start', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8, background: ORANGE, color: '#fff', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 20px', borderRadius: 2 }}
+                >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                   Open in Google Maps
-                </div>
+                </a>
               </div>
-            </a>
+            </div>
           </div>
         </div>
       </section>

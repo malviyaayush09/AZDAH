@@ -72,7 +72,7 @@ export const PHOTO_SEQUENCE = [
 ] as const;
 
 export const CONTACT_DETAILS = [
-  { label: 'Studio', text: '549/3, 9th A Main, Indiranagar\nBangalore — 560038\n(Left of Copper + Clove, PCI Gases building)' },
+  { label: 'Studio', text: 'AZDAH, AU Small Finance Bank (3rd floor)\n10/3, Jeevan Bima Nagar Main Rd\nLIC Colony, Sector 11, New Thippasandra\nBengaluru, Karnataka 560075' },
   { label: 'Hours', text: 'Mon – Sat: 6:00 AM – 9:00 PM\nSunday: 7:00 AM – 2:00 PM' },
   { label: 'WhatsApp', text: '+91 85880 56122' },
   { label: 'Email', text: 'hello@azdahfit.in' },

@@ -281,7 +281,7 @@ export default function WorkshopsPage() {
       {/* FOOTER */}
       <footer style={{ background: '#0F0C09', borderTop: '1px solid rgba(241,233,218,0.08)', padding: '32px 28px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ color: FAINT, fontSize: 12.5 }}>© AZDAH Fitness · Indiranagar, Bengaluru</span>
+          <span style={{ color: FAINT, fontSize: 12.5 }}>© AZDAH Fitness · New Thippasandra, Bengaluru</span>
           <a href="https://wa.me/918588056122" target="_blank" rel="noopener noreferrer" style={{ color: ORANGE, fontSize: 12.5, fontWeight: 600 }}>
             Questions? WhatsApp us
           </a>

@@ -93,7 +93,7 @@ export default function TermsPage() {
           },
           {
             title: '12. Contact',
-            body: `Questions about these terms?\nEmail: hello@azdahfit.in\nWhatsApp: +91 85880 56122\nAddress: 549/3, 9th A Main, Indiranagar, Bangalore — 560038`,
+            body: `Questions about these terms?\nEmail: hello@azdahfit.in\nWhatsApp: +91 85880 56122\nAddress: AZDAH, AU Small Finance Bank (3rd floor), 10/3, Jeevan Bima Nagar Main Rd, LIC Colony, Sector 11, New Thippasandra, Bengaluru, Karnataka 560075`,
           },
         ].map(({ title, body }) => (
           <section key={title} style={{ marginBottom: 48 }}>
