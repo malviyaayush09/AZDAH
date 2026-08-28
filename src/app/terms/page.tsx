@@ -43,14 +43,13 @@ export default function TermsPage() {
             body: `• Classes must be booked through the AZDAH member portal.
 • Cancellations and reschedules must be notified at least 6 hours before the class start time.
 • Late cancellations (within 6 hours) or no-shows cannot be refunded or rescheduled.
-• Each member receives one reschedule per membership month. Additional rescheduling is not permitted.
-• Where a class is cancelled with the required notice, you receive a reschedule or a refund for that class. Only one class on a pack may be rescheduled; any further cancelled classes are refunded.
+• Each member receives one reschedule per membership month, and only one class on a pack may be rescheduled. Additional rescheduling is not permitted.
 • Class packs are valid for four weeks from the date of payment. Packs are non-transferable and are not extended beyond four weeks.
 • If a class is full, you may join the waitlist. Waitlist members are confirmed in order as spots open.`,
           },
           {
             title: '4. Payments & Refunds',
-            body: `• Class pack purchases are final and are not refunded once the pack has begun, except as set out in section 3 for individual classes cancelled with the required notice.
+            body: `• Class pack purchases are final. There are no refunds or extensions once a class pack has been purchased.
 • In exceptional circumstances (serious injury, medical emergency), please contact us. Refund decisions are at AZDAH's sole discretion.
 • Payments are processed securely by Razorpay. AZDAH is not responsible for payment failures due to issues on your bank's end.
 • Workshops & one-off events: paid workshops are charged at the price shown at the time of registration. Workshop fees are non-refundable except where AZDAH cancels or reschedules the workshop, in which case registered attendees are refunded in full to their original payment method within 7 working days.
