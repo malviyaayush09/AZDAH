@@ -41,14 +41,16 @@ export default function TermsPage() {
           {
             title: '3. Class Bookings',
             body: `• Classes must be booked through the AZDAH member portal.
-• You may cancel a booking up to 2 hours before the class start time.
-• Late cancellations (within 2 hours) or no-shows cannot be refunded or rescheduled.
-• Each member receives one free reschedule per membership month. Additional rescheduling is not permitted.
+• Cancellations and reschedules must be notified at least 6 hours before the class start time.
+• Late cancellations (within 6 hours) or no-shows cannot be refunded or rescheduled.
+• Each member receives one reschedule per membership month. Additional rescheduling is not permitted.
+• Where a class is cancelled with the required notice, you receive a reschedule or a refund for that class. Only one class on a pack may be rescheduled; any further cancelled classes are refunded.
+• Class packs are valid for four weeks from the date of payment. Packs are non-transferable and are not extended beyond four weeks.
 • If a class is full, you may join the waitlist. Waitlist members are confirmed in order as spots open.`,
           },
           {
             title: '4. Payments & Refunds',
-            body: `• All payments are final. We do not offer refunds on membership purchases.
+            body: `• Class pack purchases are final and are not refunded once the pack has begun, except as set out in section 3 for individual classes cancelled with the required notice.
 • In exceptional circumstances (serious injury, medical emergency), please contact us. Refund decisions are at AZDAH's sole discretion.
 • Payments are processed securely by Razorpay. AZDAH is not responsible for payment failures due to issues on your bank's end.
 • Workshops & one-off events: paid workshops are charged at the price shown at the time of registration. Workshop fees are non-refundable except where AZDAH cancels or reschedules the workshop, in which case registered attendees are refunded in full to their original payment method within 7 working days.
