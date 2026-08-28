@@ -154,8 +154,8 @@ const FAQS = [
   { q: 'Do I need prior experience to start?', a: "None at all. Most of our students began with zero pole experience. Your coach meets you exactly where you are — it isn't important that you just started, it's important that you started at all." },
   { q: 'Who is AZDAH for?', a: 'AZDAH is a women and queer-first pole studio — a space built to feel safe and welcoming, free of judgment or comparison. No experience required, no perfect body required.' },
   { q: 'How do classes and packs work?', a: 'AZDAH runs on class packs, not monthly memberships. Choose a pack — Pole, Self-Practice, Mobility, Strength or a Combo — and book the sessions that suit you. No hidden fees, no auto-renewal.' },
-  { q: 'What should I wear to class?', a: 'Comfortable, fitted clothing you can move in. As you progress in pole, shorts help your skin grip the pole — but wear whatever feels good to begin. We will guide you on everything else.' },
-  { q: 'What if I miss a class I booked?', a: 'You can cancel up to 2 hours before the class starts from your member dashboard. You also get one free reschedule per month.' },
+  { q: 'What should I wear to class?', a: 'Shorts, with a crop top or sports bra. You need skin contact to grip the pole.' },
+  { q: 'What if I miss a class I booked?', a: 'Reschedules and cancellations must be told to us at least 6 hours before the class starts. One reschedule a month is allowed. If you cancel a class you get a reschedule or a refund for every class cancelled, but only one class on your pack can be rescheduled — the rest are refunded. Class packs are valid for four weeks, with no transfers and no extension beyond four weeks. If you are unsure about your timings, we urge you to take a smaller class pack and buy only for the classes you know you can make.' },
   { q: 'Is the payment secure?', a: 'All payments are processed through Razorpay with 256-bit SSL encryption. We never store your card details.' },
 ];
 
