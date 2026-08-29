@@ -23,7 +23,7 @@ const bodoniModa = Bodoni_Moda({
 
 export const metadata: Metadata = {
   title: 'AZDAH · Pole Studio, Bangalore',
-  description: 'A women & queer-first pole studio in Bangalore — pole art, fitness, exotic, flexibility, strength & mindfulness. Find your power.',
+  description: 'A women & queer-first pole studio in Bangalore — pole art, fitness, exotic, flexibility & mindfulness. Find your power.',
   icons: { icon: '/icon.svg' },
 };
 

@@ -21,11 +21,6 @@ export const OFFERINGS = [
   },
   {
     num: '05',
-    title: 'Strength Training',
-    desc: 'Conditioning built around one goal — the power to pull your own weight up.',
-  },
-  {
-    num: '06',
     title: 'Mindfulness',
     desc: 'Move with intention. Leave judgment and comparison at the door.',
   },
@@ -40,7 +35,7 @@ export const PHILOSOPHY = [
 export const FAQS = [
   { q: 'Do I need prior experience to start?', a: "None at all. Most of our students began with zero pole experience. Your coach meets you exactly where you are — it isn't important that you just started, it's important that you started at all." },
   { q: 'Who is AZDAH for?', a: 'AZDAH is a women and queer-first pole studio — a space built to feel safe and welcoming, free of judgment or comparison. No experience required, no perfect body required.' },
-  { q: 'How do classes and packs work?', a: 'AZDAH runs on class packs, not monthly memberships. Choose a pack — Pole, Self-Practice, Mobility, Strength or a Combo — and book the sessions that suit you. No hidden fees, no auto-renewal.' },
+  { q: 'How do classes and packs work?', a: 'AZDAH runs on class packs, not monthly memberships. Choose a pack — Pole, Self-Practice, Mobility or a Combo — and book the sessions that suit you. No hidden fees, no auto-renewal.' },
   { q: 'What should I wear to class?', a: 'Shorts, with a crop top or sports bra. You need skin contact to grip the pole.' },
   { q: 'What if I miss a class I booked?', a: 'Reschedules and cancellations must be told to us at least 6 hours before the class starts. One reschedule a month is allowed. There are no refunds or extensions once a class pack has been purchased. One class on your pack can be rescheduled — please do this at least six hours of class or it won’t be possible. Class packs are valid for four weeks, with no transfers and no extensions beyond four weeks. If you are unsure about your timings, we urge you to take a smaller class pack and buy only for the classes you know you can be fully present for.' },
   { q: 'Is the payment secure?', a: 'All payments are processed through Razorpay with 256-bit SSL encryption. We never store your card details.' },
@@ -73,7 +68,7 @@ export const PHOTO_SEQUENCE = [
 
 export const CONTACT_DETAILS = [
   { label: 'Studio', text: 'AZDAH, AU Small Finance Bank (3rd floor)\n10/3, Jeevan Bima Nagar Main Rd\nLIC Colony, Sector 11, New Thippasandra\nBengaluru, Karnataka 560075' },
-  { label: 'Hours', text: 'Mon – Sat: 6:00 AM – 9:00 PM\nSunday: 7:00 AM – 2:00 PM' },
+  { label: 'Hours', text: 'Monday: Closed\nTuesday – Sunday: By appointment only' },
   { label: 'WhatsApp', text: '+91 85880 56122' },
   { label: 'Email', text: 'hello@azdahfit.in' },
 ] as const;

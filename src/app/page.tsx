@@ -132,11 +132,6 @@ const OFFERINGS = [
   },
   {
     num: '05',
-    title: 'Strength Training',
-    desc: 'Conditioning built around one goal — the power to pull your own weight up.',
-  },
-  {
-    num: '06',
     title: 'Mindfulness',
     desc: 'Move with intention. Leave judgment and comparison at the door.',
   },
@@ -148,7 +143,6 @@ const GALLERY = [
   { label: 'Pole Fitness', sub: 'Spins & inverts', bg: 'linear-gradient(135deg,#0D1018 0%,#151825 100%)', accent: '#3b82f6' },
   { label: 'Pole Exotic', sub: 'Heels & floorwork', bg: 'linear-gradient(135deg,#15100A 0%,#22160A 100%)', accent: '#f59e0b' },
   { label: 'Flexibility', sub: 'Splits & backbends', bg: 'linear-gradient(135deg,#130A18 0%,#1E1025 100%)', accent: '#8b5cf6' },
-  { label: 'Strength', sub: 'Conditioning', bg: 'linear-gradient(135deg,#0A1510 0%,#122018 100%)', accent: '#10b981' },
   { label: 'Community', sub: 'Choosing themselves', bg: 'linear-gradient(135deg,#0A1215 0%,#101C20 100%)', accent: '#06b6d4' },
 ];
 
@@ -156,7 +150,7 @@ const GALLERY = [
 const FAQS = [
   { q: 'Do I need prior experience to start?', a: "None at all. Most of our students began with zero pole experience. Your coach meets you exactly where you are — it isn't important that you just started, it's important that you started at all." },
   { q: 'Who is AZDAH for?', a: 'AZDAH is a women and queer-first pole studio — a space built to feel safe and welcoming, free of judgment or comparison. No experience required, no perfect body required.' },
-  { q: 'How do classes and packs work?', a: 'AZDAH runs on class packs, not monthly memberships. Choose a pack — Pole, Self-Practice, Mobility, Strength or a Combo — and book the sessions that suit you. No hidden fees, no auto-renewal.' },
+  { q: 'How do classes and packs work?', a: 'AZDAH runs on class packs, not monthly memberships. Choose a pack — Pole, Self-Practice, Mobility or a Combo — and book the sessions that suit you. No hidden fees, no auto-renewal.' },
   { q: 'What should I wear to class?', a: 'Shorts, with a crop top or sports bra. You need skin contact to grip the pole.' },
   { q: 'What if I miss a class I booked?', a: 'Reschedules and cancellations must be told to us at least 6 hours before the class starts. One reschedule a month is allowed. There are no refunds or extensions once a class pack has been purchased. One class on your pack can be rescheduled — please do this at least six hours of class or it won’t be possible. Class packs are valid for four weeks, with no transfers and no extensions beyond four weeks. If you are unsure about your timings, we urge you to take a smaller class pack and buy only for the classes you know you can be fully present for.' },
   { q: 'Is the payment secure?', a: 'All payments are processed through Razorpay with 256-bit SSL encryption. We never store your card details.' },
@@ -202,7 +196,7 @@ export default function HomePage() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error } = await supabase.from('membership_plans').select('*').order('sort_order');
+        const { data, error } = await supabase.from('membership_plans').select('*').eq('is_active', true).order('sort_order');
         if (error) console.error('Plans fetch error:', error.message);
         setPlans(data || []);
       } catch (err) {
@@ -506,7 +500,7 @@ export default function HomePage() {
         <div style={{ display: 'flex', whiteSpace: 'nowrap', animation: 'marquee 22s linear infinite' }}>
           {[...Array(2)].map((_, i) => (
             <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
-              {['Pole Art', 'Pole Fitness', 'Pole Exotic', 'Flexibility', 'Strength', 'Mindfulness', 'Confidence', 'Community', 'Freedom'].map((d) => (
+              {['Pole Art', 'Pole Fitness', 'Pole Exotic', 'Flexibility', 'Mindfulness', 'Confidence', 'Community', 'Freedom'].map((d) => (
                 <span key={d} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
                   <span style={{ fontFamily: SERIF, fontStyle: 'italic', fontSize: 15, fontWeight: 700, color: DARK, padding: '0 20px', letterSpacing: '0.02em' }}>{d}</span>
                   <span style={{ color: 'rgba(21,17,13,0.5)', fontSize: 14 }}>✦</span>
@@ -526,7 +520,7 @@ export default function HomePage() {
               Built for pole dancers.<br />Designed for movement.
             </h2>
             <p style={{ color: 'rgba(21,17,13,0.6)', fontSize: 15, lineHeight: 1.7, maxWidth: 400, margin: 0 }}>
-              A welcoming space where we explore pole art, pole fitness, pole exotic, flexibility, strength training and mindfulness — without judgment or comparison.
+              A welcoming space where we explore pole art, pole fitness, pole exotic, flexibility and mindfulness — without judgment or comparison.
             </p>
           </div>
           <div className="disc-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1 }}>
@@ -699,7 +693,7 @@ export default function HomePage() {
             const POPULAR = ['Pole · 4 Classes', 'Self Practice · 8 Sessions', 'Mobility · 8 Sessions', 'Combo · Pole + Practice'];
             const catMap: Record<typeof planTab, string[]> = {
               pole:    ['pole_regular', 'pole_nimisha'],
-              offpole: ['strength', 'mobility'],
+              offpole: ['mobility'],
               self:    ['self_practice'],
               combo:   ['combo'],
             };
@@ -891,7 +885,7 @@ export default function HomePage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
               {[
                 { label: 'Studio', text: 'AZDAH, AU Small Finance Bank (3rd floor)\n10/3, Jeevan Bima Nagar Main Rd\nLIC Colony, Sector 11, New Thippasandra\nBengaluru, Karnataka 560075' },
-                { label: 'Hours', text: 'Mon – Sat: 6:00 AM – 9:00 PM\nSunday: 7:00 AM – 2:00 PM' },
+                { label: 'Hours', text: 'Monday: Closed\nTuesday – Sunday: By appointment only' },
                 { label: 'WhatsApp', text: '+91 85880 56122' },
                 { label: 'Email', text: 'hello@azdahfit.in' },
               ].map(({ label, text }) => (
