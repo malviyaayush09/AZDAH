@@ -28,3 +28,18 @@ export function classStartsAt(classDate: string, startTime: string): Date {
 export function classHasStarted(classDate: string, startTime: string): boolean {
   return classStartsAt(classDate, startTime).getTime() <= Date.now();
 }
+
+// AZDAH's studio policy: a member must give this much notice to cancel or
+// reschedule. It is stated in the site FAQ and in the Terms, so this constant
+// is the single place it lives on the server.
+export const NOTICE_HOURS = 6;
+
+export function hoursUntilClass(classDate: string, startTime: string): number {
+  return (classStartsAt(classDate, startTime).getTime() - Date.now()) / 3_600_000;
+}
+
+// True once it is too late to cancel or reschedule. Also true for a class that
+// has already started, so callers do not need a separate started check.
+export function isPastNoticeWindow(classDate: string, startTime: string): boolean {
+  return hoursUntilClass(classDate, startTime) < NOTICE_HOURS;
+}

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Settings, CalendarDays, Info, Eye, EyeOff, User } from 'lucide-react';
 import { Toast } from '@/components/Toast';
+import { isPastNoticeWindow as pastNotice, NOTICE_HOURS } from '@/lib/date';
 
 type MemberInfo = {
   id: string; name: string; phone: string;
@@ -600,17 +601,23 @@ export default function DashboardPage() {
                           </div>
                           <span style={{fontSize:11,padding:'5px 12px',background:'rgba(74,222,128,.1)',color:'#4ade80',border:'1px solid rgba(74,222,128,.25)',borderRadius:8,flexShrink:0}}>Confirmed</span>
                           <div style={{display:'flex',gap:6,flexShrink:0}}>
-                            {!member!.reschedule_used&&!rescheduleMode&&(
+                            {pastNotice(cls.class_date,cls.start_time)&&(
+                              <span style={{fontSize:11,color:MUTED,alignSelf:'center'}}>
+                                Within {NOTICE_HOURS}h of start
+                              </span>
+                            )}
+                            {!pastNotice(cls.class_date,cls.start_time)&&!member!.reschedule_used&&!rescheduleMode&&(
                               <button onClick={()=>{setRescheduleMode(cls.my_booking_id!);setTab('book');}}
                                 style={{padding:'8px 14px',fontSize:12,background:'none',border:`1px solid ${ORANGE}`,color:ORANGE,borderRadius:8,cursor:'pointer',fontWeight:500}}
                                 onMouseOver={e=>e.currentTarget.style.background=`${ORANGE}12`} onMouseOut={e=>e.currentTarget.style.background='none'}>
                                 Reschedule
                               </button>
                             )}
+                            {!pastNotice(cls.class_date,cls.start_time)&&
                             <button disabled={busyId===cls.my_booking_id} onClick={()=>cancelBooking(cls.my_booking_id!)}
                               style={{padding:'8px 14px',fontSize:12,background:'none',border:'1px solid rgba(248,113,113,.3)',color:'#f87171',borderRadius:8,cursor:'pointer',opacity:busyId===cls.my_booking_id?.5:1}}>
                               {busyId===cls.my_booking_id?'…':'Cancel'}
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       );

@@ -5,7 +5,7 @@ import { getServiceClient } from '@/lib/supabase';
 import { countUsedClasses } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
 import { sendWaitlistPromoted } from '@/lib/whatsapp';
-import { classHasStarted } from '@/lib/date';
+import { isPastNoticeWindow, NOTICE_HOURS } from '@/lib/date';
 
 export async function POST(req: NextRequest) {
   const token = req.cookies.get('session')?.value;
@@ -37,8 +37,11 @@ export async function POST(req: NextRequest) {
     .select('class_date, start_time')
     .eq('id', booking.class_id)
     .single();
-  if (cls && classHasStarted(cls.class_date, cls.start_time)) {
-    return NextResponse.json({ error: 'Cannot cancel a class that has already started' }, { status: 400 });
+  if (cls && isPastNoticeWindow(cls.class_date, cls.start_time)) {
+    return NextResponse.json(
+      { error: `Cancellations need at least ${NOTICE_HOURS} hours' notice before the class starts.` },
+      { status: 400 }
+    );
   }
 
   // Cancel the booking
