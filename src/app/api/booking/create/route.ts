@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { countUsedClasses } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
 import { sendBookingConfirmed } from '@/lib/whatsapp';
 import { checkRateLimit, recordRequest } from '@/lib/rate-limit';
@@ -77,13 +78,8 @@ export async function POST(req: NextRequest) {
 
     if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
       packLimit = planData.classes_included;
-      const { count: usedCount } = await db
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('member_id', memberId)
-        .eq('status', 'confirmed')
-        .gte('created_at', (member.plan_start || '1970-01-01') + 'T00:00:00Z');
-      if ((usedCount || 0) >= planData.classes_included) {
+      const usedCount = await countUsedClasses(db, memberId, member.plan_start);
+      if (usedCount >= planData.classes_included) {
         const n = planData.classes_included;
         return NextResponse.json(
           { error: `All ${n} class${n !== 1 ? 'es' : ''} in your pack have been used. Please purchase a new pack to continue.` },
@@ -109,15 +105,12 @@ export async function POST(req: NextRequest) {
   // undo this booking if it turned out to be one too many. (The capacity race
   // is already handled inside book_class_atomic; the pack limit is not.)
   if (packLimit !== null) {
-    const { count: confirmedNow } = await db
-      .from('bookings')
-      .select('*', { count: 'exact', head: true })
-      .eq('member_id', memberId)
-      .eq('status', 'confirmed')
-      .gte('created_at', (member.plan_start || '1970-01-01') + 'T00:00:00Z');
-    if ((confirmedNow || 0) > packLimit) {
+    const usedNow = await countUsedClasses(db, memberId, member.plan_start);
+    if (usedNow > packLimit) {
+      // Delete rather than mark cancelled. A cancelled booking now consumes a
+      // pack credit, and this booking lost a race — the member never had it.
       await db.from('bookings')
-        .update({ status: 'cancelled' })
+        .delete()
         .eq('member_id', memberId)
         .eq('class_id', classId)
         .eq('status', 'confirmed');

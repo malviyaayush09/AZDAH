@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { countUsedClasses } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -55,13 +56,8 @@ export async function GET(req: NextRequest) {
   // Count used classes in current pack (confirmed + attended since plan_start)
   let classesRemaining: number | null = null;
   if (classesIncluded !== null && member.plan_start) {
-    const { count: usedCount } = await db
-      .from('bookings')
-      .select('*', { count: 'exact', head: true })
-      .eq('member_id', memberId)
-      .eq('status', 'confirmed')
-      .gte('created_at', member.plan_start + 'T00:00:00Z');
-    classesRemaining = Math.max(0, classesIncluded - (usedCount || 0));
+    const usedCount = await countUsedClasses(db, memberId, member.plan_start);
+    classesRemaining = Math.max(0, classesIncluded - usedCount);
   }
 
   return NextResponse.json({

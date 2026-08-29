@@ -2,6 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
+import { countUsedClasses } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
 import { sendWaitlistPromoted } from '@/lib/whatsapp';
 import { classHasStarted } from '@/lib/date';
@@ -69,13 +70,8 @@ export async function POST(req: NextRequest) {
         .eq('id', m.plan_id)
         .single();
       if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
-        const { count: usedCount } = await db
-          .from('bookings')
-          .select('*', { count: 'exact', head: true })
-          .eq('member_id', entry.member_id)
-          .eq('status', 'confirmed')
-          .gte('created_at', (m.plan_start || '1970-01-01') + 'T00:00:00Z');
-        if ((usedCount || 0) >= planData.classes_included) continue; // pack exhausted
+        const usedCount = await countUsedClasses(db, entry.member_id, m.plan_start);
+        if (usedCount >= planData.classes_included) continue; // pack exhausted
       }
     }
 
