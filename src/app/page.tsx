@@ -880,7 +880,9 @@ export default function HomePage() {
           description: 'Women and queer-first pole studio in Bengaluru.',
           url: 'https://www.azdah.in',
           telephone: '+91-85880-56122',
-          email: 'hello@azdahfit.in',
+          // No email here on purpose. The inbox is not monitored, and the
+          // studio takes contact on Instagram first, then WhatsApp; listing an
+          // address in the structured data invites Google to surface it.
           // Tells Google the Instagram account is this business, so the profile
           // can surface alongside the listing.
           sameAs: [INSTAGRAM],

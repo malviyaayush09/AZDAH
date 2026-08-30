@@ -23,7 +23,11 @@ const nextConfig = {
               "font-src 'self' https://fonts.gstatic.com",
               "img-src 'self' data: https:",
               "connect-src 'self' https://*.supabase.co https://api.razorpay.com https://graph.facebook.com",
-              "frame-src https://api.razorpay.com https://www.openstreetmap.org",
+              // www.google.com is the map embed on the contact section. It was
+              // missed when the studio moved and the map switched from
+              // OpenStreetMap to Google, so the browser silently refused to
+              // render the iframe and the map came up blank.
+              "frame-src https://api.razorpay.com https://www.google.com https://www.openstreetmap.org",
             ].join('; '),
           },
         ],
