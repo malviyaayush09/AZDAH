@@ -62,7 +62,7 @@ type AuditLog = {
   details: Record<string, unknown> | null; created_at: string;
 };
 
-type Tab = 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit' | 'templates' | 'instructors' | 'workshops';
+type Tab = 'overview' | 'members' | 'calendar' | 'add-class' | 'revenue' | 'broadcast' | 'promo' | 'audit' | 'templates' | 'instructors' | 'workshops';
 
 type ClassTemplate = {
   id: string; title: string; instructor_name: string | null; instructor_id: string | null;
@@ -157,7 +157,7 @@ export default function AdminPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [classes, setClasses] = useState<ClassSlot[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [tab, setTab] = useState<Tab>('calendar');
+  const [tab, setTab] = useState<Tab>('overview');
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [search, setSearch] = useState('');
@@ -173,7 +173,10 @@ export default function AdminPage() {
   const [calPlan, setCalPlan] = useState('all');
   // Week is for scanning what is on; List is for reading who is in it. Seven
   // columns leave about 125px per class, which is too narrow for names.
-  const [calView, setCalView] = useState<'week' | 'list'>('week');
+  const [calView, setCalView] = useState<'day' | 'week' | 'list'>('day');
+  const [selectedDay, setSelectedDay] = useState<string>(() => toYMD(new Date()));
+  // The dashboard's chart data. Fetched only when she is looking at it.
+  const [trendBookings, setTrendBookings] = useState<AdminBooking[] | null>(null);
   const [showNames, setShowNames] = useState(false);
   // Members tab: which row is expanded, and the dates behind it.
   const [openMember, setOpenMember] = useState<string | null>(null);
@@ -756,6 +759,58 @@ export default function AdminPage() {
 
   async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); router.push('/login'); }
 
+  // Ten destinations read as a wall when they are one flat list. Grouping
+  // means she scans four headings instead of ten words.
+  const NAV: { section: string | null; items: { k: Tab; label: string }[] }[] = [
+    { section: null,       items: [{ k:'overview', label:'Dashboard' }] },
+    { section: 'Schedule', items: [{ k:'calendar', label:'Calendar' }, { k:'add-class', label:'Add class' }, { k:'templates', label:'Templates' }] },
+    { section: 'People',   items: [{ k:'members', label:'Members' }, { k:'instructors', label:'Instructors' }] },
+    { section: 'Money',    items: [{ k:'revenue', label:'Revenue' }, { k:'promo', label:'Promos' }] },
+    { section: 'More',     items: [{ k:'workshops', label:'Workshops' }, { k:'audit', label:'Audit' }] },
+  ];
+  const TITLES: Record<Tab, [string, string]> = {
+    overview:    ['Dashboard',   'How the studio is doing right now.'],
+    calendar:    ['Calendar',    'Every class, and who is coming to it.'],
+    members:     ['Members',     'Everyone who has ever joined.'],
+    revenue:     ['Revenue',     'What has been taken, and from which plans.'],
+    'add-class': ['Add a class', 'Put a new class on the schedule.'],
+    templates:   ['Templates',   'Classes you run again and again.'],
+    instructors: ['Instructors', 'Who teaches, and their logins.'],
+    workshops:   ['Workshops',   'One-off sessions, open to non-members.'],
+    promo:       ['Promo codes', 'Discounts, and what they have cost.'],
+    audit:       ['Audit log',   'What was changed here, and by whom.'],
+    broadcast:   ['Broadcast',   'Message members at once.'],
+  };
+  function goTab(k: Tab) {
+    setTab(k); setMsg(null);
+    if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog();
+    if(k==='templates')loadTemplates(); if(k==='instructors')loadInstructors(); if(k==='workshops')loadWorkshops();
+  }
+
+  // Colour carries fullness, not which instructor is teaching. She scans a
+  // calendar asking what is filling and what is empty, and instructor identity
+  // was taking the whole colour budget while capacity got a hairline.
+  const fillTone = (booked: number, cap: number) => {
+    if (!cap) return MUTED;
+    if (booked === 0) return 'rgba(241,233,218,0.20)';
+    const p = booked / cap;
+    if (p >= 1) return '#f87171';
+    if (p >= 0.6) return '#4ade80';
+    return '#fbbf24';
+  };
+  const FILL_KEY: [string, string][] = [
+    ['rgba(241,233,218,0.20)', 'Nobody yet'],
+    ['#fbbf24', 'Filling'],
+    ['#4ade80', 'Nearly full'],
+    ['#f87171', 'Full'],
+  ];
+  const durationOf = (a: string, b: string | null) => {
+    if (!b) return null;
+    const m = (t: string) => { const [h, mm] = t.split(':').map(Number); return h * 60 + mm; };
+    const d = m(b) - m(a);
+    return d > 0 ? (d >= 60 && d % 60 === 0 ? `${d / 60} hr` : `${d} min`) : null;
+  };
+
   const weekDates = getWeekDates(weekStart);
   const todayStr = toYMD(new Date());
   // Trimmed: the data holds both 'AZDAH' and 'AZDAH ', which listed the same
@@ -766,6 +821,29 @@ export default function AdminPage() {
     const n = (name || '').trim();
     return n ? PALETTE[trainerNames.indexOf(n) % PALETTE.length] : MUTED;
   };
+  // Moving the week must move the chosen day with it, or the day view shows
+  // nothing and looks broken.
+  useEffect(() => {
+    const days = getWeekDates(weekStart).map(toYMD);
+    if (!days.includes(selectedDay)) {
+      const t = toYMD(new Date());
+      setSelectedDay(days.includes(t) ? t : days[0]);
+    }
+    // selectedDay is deliberately not a dependency: this only corrects the day
+    // when the week itself moves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weekStart]);
+
+  useEffect(() => {
+    if (tab !== 'overview' || trendBookings !== null) return;
+    const end = new Date(); end.setDate(end.getDate() + 6);
+    const start = new Date(); start.setDate(start.getDate() - 29);
+    fetch(`/api/admin/bookings?from=${toYMD(start)}&to=${toYMD(end)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setTrendBookings(d?.bookings || []))
+      .catch(() => setTrendBookings([]));
+  }, [tab, trendBookings]);
+
   // Bookings for the week on screen. Refetched whenever the week moves.
   useEffect(() => {
     const days = getWeekDates(weekStart);
@@ -878,6 +956,27 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
     <main style={{ minHeight:'100vh', background:DARK, fontFamily:'system-ui,sans-serif' }}>
       <style dangerouslySetInnerHTML={{ __html: `
         *{box-sizing:border-box}
+        @media(max-width:900px){ .dash-charts{grid-template-columns:1fr !important} }
+        .asidebar{width:214px;flex-shrink:0;background:#131009;border-right:1px solid ${BORDER};
+          display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+        .anav{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font-size:13px;
+          padding:8px 10px;border:none;border-radius:7px;cursor:pointer;font-family:inherit;
+          transition:background .15s,color .15s}
+        .anav:hover{background:rgba(255,255,255,.04)}
+        .anav-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;transition:background .15s}
+        @media(max-width:860px){ .ashell{flex-direction:column} }
+        @media(max-width:860px){
+          /* The sidebar becomes a scrolling strip along the top rather than
+             stealing a fifth of a phone screen. */
+          .asidebar{position:static;width:100%;height:auto;flex-direction:row;align-items:center;
+            overflow-x:auto;border-right:none;border-bottom:1px solid ${BORDER}}
+          .asidebar>div:first-child{padding:12px 14px}
+          .asidebar nav{display:flex;gap:4px;padding:0 8px;overflow-x:auto}
+          .asidebar nav>div{display:flex;gap:4px;margin-bottom:0 !important}
+          .asidebar nav>div>div:first-child{display:none}
+          .anav{width:auto;white-space:nowrap}
+          .asidebar>div:last-child{border-top:none;padding:0 14px}
+        }
         .atab{transition:color .15s;background:none;border:none;cursor:pointer;font-family:inherit}
         .atab:hover{color:${CREAM} !important}
         .mrow{transition:background .12s}
@@ -896,6 +995,18 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
         @media(max-width:900px){.admin-cal{grid-template-columns:1fr !important}}
         .cbk .dup{opacity:0;transition:opacity .15s}
         .cbk:hover .dup,.cbk:focus-within .dup{opacity:1}
+        .dstrip{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:22px}
+        .dpick{display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 4px 10px;
+          border:1px solid transparent;border-radius:12px;background:none;cursor:pointer;
+          font-family:inherit;transition:background .18s,border-color .18s}
+        .dpick:hover{background:rgba(255,255,255,.035)}
+        .drow{display:grid;grid-template-columns:112px 1fr 132px;gap:22px;align-items:center;
+          padding:20px 22px;border:1px solid ${BORDER};border-radius:14px;background:${CARD};
+          margin-bottom:10px;cursor:pointer;transition:border-color .18s,transform .18s}
+        .drow:hover{border-color:rgba(241,233,218,.22);transform:translateY(-1px)}
+        @media(max-width:760px){
+          .drow{grid-template-columns:1fr;gap:10px;padding:16px}
+        }
         .lrow,.lhead{display:grid;
           grid-template-columns:74px minmax(140px,1fr) 104px 52px minmax(200px,1.9fr);
           gap:10px;align-items:center}
@@ -909,20 +1020,48 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
         }
       `}} />
 
-      {/* ── Navbar ── */}
-      <nav style={{ height:54, background:'#131009', borderBottom:`1px solid ${BORDER}`, padding:'0 24px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <img src="/azdahlogo.png" alt="AZDAH" style={{ height:28, width:'auto', display:'block', filter:'none' }} />
-          <span style={{ fontSize:9, background:`${ORANGE}22`, color:ORANGE, border:`1px solid ${ORANGE}40`, padding:'2px 7px', borderRadius:4, letterSpacing:'.12em', textTransform:'uppercase' }}>Admin</span>
-        </div>
-        <button onClick={logout} style={{ color:MUTED, fontSize:13, background:'none', border:'none', cursor:'pointer' }}>Logout</button>
-      </nav>
+      <div className="ashell" style={{ display:'flex', alignItems:'stretch', minHeight:'100vh' }}>
 
-      <div style={{ maxWidth:1240, margin:'0 auto', padding:'24px 20px' }}>
+        {/* ── Sidebar ── */}
+        <aside className="asidebar">
+          <div style={{ padding:'20px 18px 22px', display:'flex', alignItems:'center', gap:9 }}>
+            <img src="/azdahlogo.png" alt="AZDAH" style={{ height:26, width:'auto', display:'block' }} />
+            <span style={{ fontSize:8.5, background:`${ORANGE}22`, color:ORANGE, border:`1px solid ${ORANGE}40`, padding:'2px 6px', borderRadius:4, letterSpacing:'.12em', textTransform:'uppercase' }}>Admin</span>
+          </div>
 
-        {/* ── Heading ── */}
-        <h1 style={{ fontFamily:SERIF, fontSize:32, fontWeight:800, color:CREAM, margin:'0 0 6px', lineHeight:1.05, letterSpacing:'-.01em' }}>Studio overview</h1>
-        <p style={{ color:MUTED, fontSize:14, margin:'0 0 22px' }}>Members, bookings and revenue at a glance.</p>
+          <nav style={{ flex:1, overflowY:'auto', padding:'0 10px 14px' }}>
+            {NAV.map((group, gi) => (
+              <div key={group.section || 'top'} style={{ marginBottom: gi === NAV.length-1 ? 0 : 16 }}>
+                {group.section && (
+                  <div style={{ fontSize:9, letterSpacing:'.16em', textTransform:'uppercase', color:'rgba(241,233,218,0.34)', fontWeight:700, padding:'0 10px', marginBottom:6 }}>
+                    {group.section}
+                  </div>
+                )}
+                {group.items.map(it => {
+                  const on = tab === it.k;
+                  return (
+                    <button key={it.k} onClick={() => goTab(it.k)} className="anav"
+                      style={{ color: on ? ORANGE : MUTED, background: on ? `${ORANGE}14` : 'transparent',
+                        fontWeight: on ? 600 : 400 }}>
+                      <span className="anav-dot" style={{ background: on ? ORANGE : 'transparent' }} />
+                      {it.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+
+          <div style={{ borderTop:`1px solid ${BORDER}`, padding:'12px 18px' }}>
+            <button onClick={logout} style={{ color:MUTED, fontSize:12.5, background:'none', border:'none', cursor:'pointer', padding:0 }}>Logout</button>
+          </div>
+        </aside>
+
+      <div style={{ flex:1, minWidth:0, padding:'26px 30px 60px' }}>
+
+        {/* ── Heading, named by wherever she is ── */}
+        <h1 style={{ fontFamily:SERIF, fontSize:30, fontWeight:800, color:CREAM, margin:'0 0 5px', lineHeight:1.05, letterSpacing:'-.01em' }}>{TITLES[tab][0]}</h1>
+        <p style={{ color:MUTED, fontSize:13.5, margin:'0 0 22px' }}>{TITLES[tab][1]}</p>
 
         {/* Money taken, nothing delivered. Highest-priority thing on the page. */}
         {memberOrphans.length > 0 && (
@@ -961,20 +1100,98 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
           </div>
         )}
 
-        {/* Automatic messaging is behind a kill switch. Without saying so, it
-            looks like members were notified when nothing was ever sent. */}
+        {/* ════ DASHBOARD ════ */}
+        {tab === 'overview' && (<>
+
+        {/* Standing fact, not an alarm. This is true every day the kill switch
+            is off, and a permanent warning box teaches her to stop reading the
+            red one beside it — which is the one that means money is missing. */}
         {overviewStats && overviewStats.whatsapp_enabled === false && (
-          <div style={{ marginBottom:16, padding:'11px 14px', background:'rgba(251,191,36,.07)', border:'1px solid rgba(251,191,36,.22)', borderRadius:8, fontSize:12.5, color:'#fbbf24', display:'flex', alignItems:'flex-start', gap:9 }}>
-            <MessageCircle size={14} strokeWidth={1.6} style={{ flexShrink:0, marginTop:1 }} />
-            <span style={{ lineHeight:1.5 }}>
-              <strong style={{ fontWeight:700 }}>Automatic WhatsApp is off.</strong>{' '}
-              <span style={{ color:'#d9bf86' }}>
-                Members are not messaged automatically — no welcome, booking, reminder or expiry messages are sent.
-                Use the WhatsApp buttons here to message people yourself, and read out new passwords from the screen.
-              </span>
+          <div style={{ marginBottom:18, display:'flex', alignItems:'center', gap:8, fontSize:12, color:MUTED }}>
+            <MessageCircle size={13} strokeWidth={1.6} style={{ flexShrink:0, opacity:.7 }} />
+            <span>
+              Automatic WhatsApp is off — nobody is messaged automatically. Use the WhatsApp buttons
+              to write to people yourself, and read new passwords off the screen.
             </span>
           </div>
         )}
+
+        {/* ── Charts ──
+            Deliberately bars, not trend lines: there are two months of trading
+            history, and a line through two points looks like a broken chart
+            rather than a business. These read correctly at this size and get
+            better as the data builds up. */}
+        <div style={{ display:'grid', gridTemplateColumns:'1.55fr 1fr', gap:14, marginBottom:16 }} className="dash-charts">
+
+          {/* Classes taken, by day */}
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'16px 18px 14px' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:16 }}>
+              <span style={{ fontSize:9, color:MUTED, letterSpacing:'.12em', textTransform:'uppercase', fontWeight:600 }}>Classes taken, last 30 days</span>
+              <span style={{ fontSize:12, color:MUTED }}>
+                {trendBookings === null ? '' : `${trendBookings.filter(b => b.class_date <= todayStr).length} total`}
+              </span>
+            </div>
+            {trendBookings === null ? (
+              <div style={{ height:104, display:'flex', alignItems:'center', color:MUTED, fontSize:12 }}>Loading…</div>
+            ) : (() => {
+              const days = Array.from({length:30}, (_,i) => {
+                const d = new Date(); d.setDate(d.getDate() - 29 + i); return toYMD(d);
+              });
+              const counts = days.map(ds => trendBookings.filter(b => b.class_date === ds).length);
+              const peak = Math.max(1, ...counts);
+              return (
+                <>
+                  <div style={{ display:'flex', alignItems:'flex-end', gap:3, height:104 }}>
+                    {days.map((ds, i) => (
+                      <div key={ds} title={`${fmtDate(ds)} — ${counts[i]} class${counts[i]===1?'':'es'}`}
+                        style={{ flex:1, height:`${Math.max(2,(counts[i]/peak)*100)}%`, borderRadius:'3px 3px 0 0',
+                          background: counts[i] === 0 ? 'rgba(241,233,218,.07)' : ds === todayStr ? CREAM : ORANGE,
+                          opacity: counts[i] === 0 ? 1 : ds === todayStr ? 1 : .82 }} />
+                    ))}
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginTop:8, fontSize:10.5, color:MUTED }}>
+                    <span>{fmtDate(days[0])}</span><span>Today</span>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+
+          {/* How the coming week is filling */}
+          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'16px 18px 14px' }}>
+            <div style={{ fontSize:9, color:MUTED, letterSpacing:'.12em', textTransform:'uppercase', fontWeight:600, marginBottom:16 }}>
+              How the next 7 days are filling
+            </div>
+            {(() => {
+              const next7 = Array.from({length:7}, (_,i) => {
+                const d = new Date(); d.setDate(d.getDate() + i); return d;
+              });
+              const rows = next7.map(d => {
+                const ds = toYMD(d);
+                const cs = classes.filter(c => c.class_date === ds && !c.is_cancelled);
+                const cap = cs.reduce((n,c) => n + c.capacity, 0);
+                const bk = cs.reduce((n,c) => n + c.booked_count, 0);
+                return { d, ds, cap, bk, pct: cap ? (bk/cap)*100 : 0 };
+              });
+              if (rows.every(r => r.cap === 0)) {
+                return <div style={{ fontSize:12, color:MUTED, padding:'26px 0' }}>No classes scheduled in the next week.</div>;
+              }
+              return rows.map(r => (
+                <div key={r.ds} style={{ display:'flex', alignItems:'center', gap:10, marginBottom:9 }}>
+                  <span style={{ fontSize:10.5, color: r.ds === todayStr ? ORANGE : MUTED, width:30, flexShrink:0, textTransform:'uppercase', letterSpacing:'.06em' }}>
+                    {r.d.toLocaleDateString('en-IN',{weekday:'short'})}
+                  </span>
+                  <div style={{ flex:1, height:7, background:'rgba(255,255,255,.05)', borderRadius:999, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${r.pct}%`, background:fillTone(r.bk, r.cap || 1), borderRadius:999, transition:'width .4s' }} />
+                  </div>
+                  <span style={{ fontSize:11, color:MUTED, width:42, textAlign:'right', flexShrink:0 }}>
+                    {r.cap ? `${r.bk}/${r.cap}` : '—'}
+                  </span>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
 
         {/* ── KPI Row ── */}
         {stats && (
@@ -1075,16 +1292,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
           </div>
         )}
 
-        {/* ── Tab bar ── */}
-        <div style={{ display:'flex', borderBottom:`1px solid ${BORDER}`, marginBottom:20 }}>
-          {/* 'Broadcast' tab hidden until WhatsApp is live — it would report success while sending nothing. Re-add ['broadcast','Broadcast'] when WHATSAPP_ENABLED=true. */}
-          {([['calendar','Calendar'],['members','Members'],['revenue','Revenue'],['add-class','Add Class'],['templates','Templates'],['instructors','Instructors'],['workshops','Workshops'],['promo','Promos'],['audit','Audit']] as const).map(([k,l]) => (
-            <button key={k} className="atab" onClick={() => { setTab(k); setMsg(null); if(k==='revenue')loadRevenue(); if(k==='promo')loadPromoCodes(); if(k==='audit')loadAuditLog(); if(k==='templates')loadTemplates(); if(k==='instructors')loadInstructors(); if(k==='workshops')loadWorkshops(); }}
-              style={{ padding:'13px 20px', fontSize:13, fontWeight:500, color: tab===k ? ORANGE : MUTED, borderBottom: tab===k ? `2px solid ${ORANGE}` : '2px solid transparent', marginBottom:-1 }}>
-              {l}
-            </button>
-          ))}
-        </div>
+        </>)}
 
         {/* ════ CALENDAR TAB ════ */}
         {tab === 'calendar' && (
@@ -1108,7 +1316,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 </div>
                 <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
                   <div style={{ display:'flex', border:`1px solid ${BORDER}`, borderRadius:6, overflow:'hidden' }}>
-                    {([['week','Week'],['list','List']] as const).map(([k,l]) => (
+                    {([['day','Day'],['week','Week'],['list','List']] as const).map(([k,l]) => (
                       <button key={k} onClick={() => { setCalView(k); if (k === 'list') setShowNames(true); }}
                         title={k === 'week' ? 'Grid of the week' : 'Every class with who is booked'}
                         style={{ padding:'6px 14px', fontSize:12, fontWeight:500, border:'none', cursor:'pointer',
@@ -1165,6 +1373,108 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 </div>
               )}
 
+              {/* Day: one day at a time, with room to breathe. Seven columns
+                  is what forced every class into a 125px sliver. */}
+              {calView === 'day' && (() => {
+                const dayOf = (ds: string) => classes
+                  .filter(c => c.class_date === ds && !c.is_cancelled && calMatch(c))
+                  .sort((a,b) => a.start_time.localeCompare(b.start_time));
+                const todays = dayOf(selectedDay);
+                const heads = todays.reduce((n,c) => n + c.booked_count, 0);
+                return (
+                  <>
+                    <div className="dstrip">
+                      {weekDates.map(d => {
+                        const ds = toYMD(d);
+                        const n = dayOf(ds).length;
+                        const on = ds === selectedDay;
+                        const isToday = ds === todayStr;
+                        return (
+                          <button key={ds} className="dpick" onClick={() => setSelectedDay(ds)}
+                            style={{ background: on ? ORANGE : undefined, borderColor: !on && isToday ? ORANGE + '55' : undefined }}>
+                            <span style={{ fontSize:10, letterSpacing:'.14em', textTransform:'uppercase',
+                              color: on ? '#fff' : isToday ? ORANGE : MUTED }}>
+                              {d.toLocaleDateString('en-IN',{weekday:'short'})}
+                            </span>
+                            <span style={{ fontSize:21, fontWeight:700, lineHeight:1,
+                              color: on ? '#fff' : isToday ? ORANGE : CREAM }}>
+                              {d.getDate()}
+                            </span>
+                            {/* A dot per class, so the shape of the week stays
+                                readable without leaving the day view. */}
+                            <span style={{ display:'flex', gap:2.5, height:4, alignItems:'center' }}>
+                              {n === 0
+                                ? <span style={{ width:3, height:3, borderRadius:'50%', background: on ? 'rgba(255,255,255,.35)' : 'rgba(241,233,218,.13)' }} />
+                                : Array.from({length: Math.min(n,5)}).map((_,i) => (
+                                    <span key={i} style={{ width:3.5, height:3.5, borderRadius:'50%', background: on ? '#fff' : ORANGE }} />
+                                  ))}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div style={{ display:'flex', alignItems:'baseline', gap:10, margin:'0 0 14px 2px', flexWrap:'wrap' }}>
+                      <span style={{ fontFamily:SERIF, fontSize:19, fontWeight:700, color:CREAM }}>
+                        {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-IN',{weekday:'long', day:'numeric', month:'long'})}
+                      </span>
+                      <span style={{ fontSize:12.5, color:MUTED }}>
+                        {todays.length === 0
+                          ? 'nothing on'
+                          : todays.length + (todays.length === 1 ? ' class' : ' classes') + ' \u00b7 ' + heads + ' booked'}
+                      </span>
+                    </div>
+
+                    {todays.length === 0 ? (
+                      <div style={{ padding:'60px 0', textAlign:'center', color:MUTED, fontSize:13.5, border:'1px dashed ' + BORDER, borderRadius:14 }}>
+                        No classes on this day.
+                      </div>
+                    ) : todays.map(cls => {
+                      const bs = bookingsByClass.get(cls.id) || [];
+                      const tone = fillTone(cls.booked_count, cls.capacity);
+                      const dur = durationOf(cls.start_time, cls.end_time);
+                      return (
+                        <article key={cls.id} className="drow" onClick={() => openClassModal(cls)}
+                          style={{ borderLeft:'3px solid ' + tone }}>
+                          <div>
+                            <div style={{ fontSize:16, fontWeight:700, color:CREAM, letterSpacing:'-.01em' }}>{fmtTime(cls.start_time)}</div>
+                            {dur && <div style={{ fontSize:11.5, color:MUTED, marginTop:2 }}>{dur}</div>}
+                          </div>
+
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:15.5, fontWeight:600, color:CREAM, marginBottom:3 }}>{cls.title}</div>
+                            <div style={{ fontSize:12.5, color:MUTED }}>{cls.trainer_name?.trim() || 'No instructor set'}</div>
+                            {bs.length > 0 && (
+                              <div style={{ display:'flex', flexWrap:'wrap', gap:'5px 6px', marginTop:11 }}>
+                                {bs.map(b => (
+                                  <span key={b.id} title={b.plan_name || 'no pack'}
+                                    style={{ fontSize:11.5, padding:'3px 10px', borderRadius:999,
+                                      border:'1px solid ' + (b.member_id===calMember ? ORANGE : BORDER),
+                                      color: b.member_id===calMember ? ORANGE : CREAM,
+                                      background: b.member_id===calMember ? ORANGE + '16' : 'transparent' }}>
+                                    {b.member_name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ textAlign:'right' }}>
+                            <div style={{ fontSize:14, fontWeight:700, color:tone }}>
+                              {cls.booked_count} of {cls.capacity}
+                            </div>
+                            <div style={{ fontSize:11, color:MUTED, marginTop:2, marginBottom:8 }}>booked</div>
+                            <div style={{ height:4, background:'rgba(255,255,255,.06)', borderRadius:999, overflow:'hidden' }}>
+                              <div style={{ height:'100%', width: Math.min(100,(cls.booked_count/(cls.capacity||1))*100) + '%', background:tone, borderRadius:999, transition:'width .3s' }} />
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </>
+                );
+              })()}
+
               {/* List: one row per class, with room across the page for the
                   names the 125px grid columns cannot hold. */}
               {calView === 'list' && (
@@ -1194,7 +1504,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                           {ds===todayStr && <span style={{ fontSize:10, color:ORANGE, letterSpacing:'.1em', textTransform:'uppercase' }}>Today</span>}
                         </div>
                         {list.map(cls => {
-                          const tc = trainerColor(cls.trainer_name);
+                          const tc = fillTone(cls.booked_count, cls.capacity);
                           const bs = bookingsByClass.get(cls.id) || [];
                           const full = cls.booked_count >= cls.capacity;
                           return (
@@ -1210,7 +1520,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                               </span>
                               <span style={{ display:'flex', flexWrap:'wrap', gap:'4px 6px' }}>
                                 {bs.length === 0
-                                  ? <span style={{ fontSize:11.5, color:MUTED, opacity:.6 }}>Nobody booked</span>
+                                  ? <span style={{ fontSize:13, color:MUTED, opacity:.35 }}>&mdash;</span>
                                   : bs.map(b => (
                                       <span key={b.id} title={b.plan_name || 'no pack'}
                                         style={{ fontSize:11, padding:'2px 8px', borderRadius:999,
@@ -1254,17 +1564,19 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                           <div style={{ height:40, display:'flex', alignItems:'center', justifyContent:'center', color:'#2A2118', fontSize:18 }}>·</div>
                         )}
                         {dayClasses.map(cls => {
-                          const tc = trainerColor(cls.trainer_name);
+                          // Fullness, not instructor. A week tinted five colours
+                          // by who is teaching tells her nothing she scans for.
+                          const tc = fillTone(cls.booked_count, cls.capacity);
                           const pct = (cls.booked_count / cls.capacity) * 100;
                           return (
                             <div key={cls.id} className="cbk" onClick={() => openClassModal(cls)}
-                              style={{ background:`${tc}12`, border:`1px solid ${tc}30`, borderLeft:`3px solid ${tc}`, borderRadius:7, padding:'9px 8px' }}>
+                              style={{ background:`${tc}10`, border:`1px solid ${tc}2e`, borderLeft:`3px solid ${tc}`, borderRadius:7, padding:'9px 8px', minHeight:96 }}>
                               <div style={{ fontSize:11, fontWeight:600, color:CREAM, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.title}</div>
                               {/* Time and instructor share a line, and the fill
                                   bar carries the count beside it. Five stacked
                                   rows in a 125px column read as noise. */}
                               <div style={{ fontSize:10, color:MUTED, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                                {fmtTime(cls.start_time)}{cls.trainer_name ? <span style={{ color:tc }}> · {cls.trainer_name.trim()}</span> : null}
+                                {fmtTime(cls.start_time)}{cls.trainer_name ? <span> · {cls.trainer_name.trim()}</span> : null}
                               </div>
                               <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6 }}>
                                 <div style={{ flex:1, height:3, background:'rgba(255,255,255,.06)', borderRadius:999, overflow:'hidden' }}>
@@ -1379,18 +1691,22 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 </div>
               </div>
 
-              {/* Trainer legend */}
-              {trainerNames.length > 0 && (
-                <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'14px 16px' }}>
-                  <div style={{ fontSize:9, color:MUTED, letterSpacing:'.12em', textTransform:'uppercase', marginBottom:12 }}>Trainers</div>
-                  {trainerNames.map(name => (
-                    <div key={name} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:7 }}>
-                      <div style={{ width:8, height:8, borderRadius:'50%', background:trainerColor(name), flexShrink:0 }} />
-                      <span style={{ fontSize:12, color:CREAM }}>{name}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* What the colours mean. Replaces a trainer legend, now that
+                  colour carries fullness rather than who is teaching. */}
+              <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, padding:'14px 16px' }}>
+                <div style={{ fontSize:9, color:MUTED, letterSpacing:'.12em', textTransform:'uppercase', marginBottom:12 }}>How full</div>
+                {FILL_KEY.map(([colour, label]) => (
+                  <div key={label} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:7 }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:colour, flexShrink:0 }} />
+                    <span style={{ fontSize:12, color:CREAM }}>{label}</span>
+                  </div>
+                ))}
+                {trainerNames.length > 0 && (
+                  <div style={{ marginTop:12, paddingTop:12, borderTop:`1px solid ${BORDER}`, fontSize:11.5, color:MUTED, lineHeight:1.5 }}>
+                    Teaching this week: {trainerNames.join(', ')}
+                  </div>
+                )}
+              </div>
 
               {/* Expiring soon alert */}
               {stats && stats.expiring_soon > 0 && (
@@ -2285,6 +2601,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
           </div>
         )}
 
+      </div>
       </div>
 
       {/* ════ FREEZE MODAL ════ */}
