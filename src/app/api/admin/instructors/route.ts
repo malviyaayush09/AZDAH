@@ -63,6 +63,6 @@ export async function POST(req: NextRequest) {
   await db.from('classes').update({ instructor_id: created.id }).eq('trainer_name', trimmedName).is('instructor_id', null);
 
   // Return the generated password once so the admin can share it.
-  logAudit((admin as { phone: string }).phone, 'instructor_created', 'instructor', created?.id, { name: created?.name }).catch(() => {});
+  await logAudit((admin as { phone: string }).phone, 'instructor_created', 'instructor', created?.id, { name: created?.name }).catch(() => {});
   return NextResponse.json({ success: true, instructor: created, password: rawPassword });
 }

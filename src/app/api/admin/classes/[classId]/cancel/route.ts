@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: { classId: st
   // Nobody can be promoted into a cancelled class.
   await db.from('waitlist').delete().eq('class_id', params.classId);
 
-  logAudit((admin as { phone: string }).phone, 'class_cancelled', 'class', params.classId, {
+  await logAudit((admin as { phone: string }).phone, 'class_cancelled', 'class', params.classId, {
     bookings_released: released?.length ?? 0,
   }).catch(() => {});
 

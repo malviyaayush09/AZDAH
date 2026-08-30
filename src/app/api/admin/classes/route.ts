@@ -90,6 +90,6 @@ export async function POST(req: NextRequest) {
   });
 
   if (error) return NextResponse.json({ error: 'Failed to create class' }, { status: 500 });
-  logAudit(admin.phone, 'class_created', 'class', undefined, { title, class_date, start_time }).catch(() => {});
+  await logAudit(admin.phone, 'class_created', 'class', undefined, { title, class_date, start_time }).catch(() => {});
   return NextResponse.json({ success: true });
 }

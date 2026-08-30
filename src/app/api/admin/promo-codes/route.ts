@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.code === '23505' ? 'Code already exists' : 'Failed to create' }, { status: 400 });
   }
 
-  logAudit(admin.phone, 'promo_code_created', 'promo_code', code.toUpperCase(), { discount_percent }).catch(() => {});
+  await logAudit(admin.phone, 'promo_code_created', 'promo_code', code.toUpperCase(), { discount_percent }).catch(() => {});
   return NextResponse.json({ ok: true });
 }
 
@@ -69,6 +69,6 @@ export async function PATCH(req: NextRequest) {
   const { id, is_active } = await req.json() as { id: string; is_active: boolean };
   const db = getServiceClient();
   await db.from('promo_codes').update({ is_active }).eq('id', id);
-  logAudit(admin.phone, is_active ? 'promo_code_enabled' : 'promo_code_disabled', 'promo_code', id).catch(() => {});
+  await logAudit(admin.phone, is_active ? 'promo_code_enabled' : 'promo_code_disabled', 'promo_code', id).catch(() => {});
   return NextResponse.json({ ok: true });
 }

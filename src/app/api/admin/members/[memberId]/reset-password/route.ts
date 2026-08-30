@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 });
 
   // Never log the password itself.
-  logAudit((admin as { phone: string }).phone, 'member_password_reset', 'member', params.memberId, {
+  await logAudit((admin as { phone: string }).phone, 'member_password_reset', 'member', params.memberId, {
     member: member.name,
   }).catch(() => {});
 

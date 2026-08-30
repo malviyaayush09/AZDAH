@@ -54,6 +54,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  logAudit((admin as { phone: string }).phone, 'broadcast_sent', undefined, undefined, { audience, sent, failed }).catch(() => {});
+  await logAudit((admin as { phone: string }).phone, 'broadcast_sent', undefined, undefined, { audience, sent, failed }).catch(() => {});
   return NextResponse.json({ ok: true, sent, failed, total: recipients?.length ?? 0 });
 }

@@ -45,6 +45,6 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  logAudit((admin as { phone: string }).phone, 'class_duplicated', 'class', newCls.id, { from: params.classId, date: nextDateStr }).catch(() => {});
+  await logAudit((admin as { phone: string }).phone, 'class_duplicated', 'class', newCls.id, { from: params.classId, date: nextDateStr }).catch(() => {});
   return NextResponse.json({ success: true, newClassId: newCls.id, newDate: nextDateStr });
 }

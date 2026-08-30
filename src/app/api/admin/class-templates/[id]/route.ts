@@ -30,7 +30,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   const db = getServiceClient();
   const { error } = await db.from('class_templates').update(update).eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  logAudit((session as { phone: string }).phone, 'template_updated', 'class_template', params.id).catch(() => {});
+  await logAudit((session as { phone: string }).phone, 'template_updated', 'class_template', params.id).catch(() => {});
   return NextResponse.json({ success: true });
 }
 

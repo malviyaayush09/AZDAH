@@ -119,7 +119,7 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
   }
   await db.from('members').update(update).eq('id', params.memberId);
 
-  logAudit((admin as { phone: string }).phone, 'member_refunded', 'member', params.memberId, {
+  await logAudit((admin as { phone: string }).phone, 'member_refunded', 'member', params.memberId, {
     member: member.name,
     amount_paise: refundAmount,
     full_refund: refundAmount === refundableAmount,

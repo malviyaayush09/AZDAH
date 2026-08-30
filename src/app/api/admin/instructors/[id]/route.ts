@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const { error } = await db.from('instructors').update({ password_hash: hash }).eq('id', id);
     if (error) return NextResponse.json({ error: 'Failed' }, { status: 500 });
     // Never log the password itself.
-    logAudit((admin as { phone: string }).phone, 'instructor_password_reset', 'instructor', id, { name: inst.name }).catch(() => {});
+    await logAudit((admin as { phone: string }).phone, 'instructor_password_reset', 'instructor', id, { name: inst.name }).catch(() => {});
     return NextResponse.json({ ok: true, password: rawPassword, name: inst.name, phone: inst.phone });
   }
 
@@ -42,7 +42,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (typeof body.is_active === 'boolean') {
     const { error } = await db.from('instructors').update({ is_active: body.is_active }).eq('id', id);
     if (error) return NextResponse.json({ error: 'Failed' }, { status: 500 });
-    logAudit((admin as { phone: string }).phone, body.is_active ? 'instructor_activated' : 'instructor_deactivated', 'instructor', id).catch(() => {});
+    await logAudit((admin as { phone: string }).phone, body.is_active ? 'instructor_activated' : 'instructor_deactivated', 'instructor', id).catch(() => {});
     return NextResponse.json({ ok: true });
   }
 
@@ -61,6 +61,6 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   await db.from('classes').update({ instructor_id: null }).eq('instructor_id', id);
   const { error } = await db.from('instructors').delete().eq('id', id);
   if (error) return NextResponse.json({ error: 'Failed to delete' }, { status: 500 });
-  logAudit((admin as { phone: string }).phone, 'instructor_deleted', 'instructor', id).catch(() => {});
+  await logAudit((admin as { phone: string }).phone, 'instructor_deleted', 'instructor', id).catch(() => {});
   return NextResponse.json({ ok: true });
 }

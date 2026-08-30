@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
     created = inserted?.length ?? 0;
   }
 
-  logAudit((session as { phone: string }).phone, 'generate_cycle_run', 'class', undefined, {
+  await logAudit((session as { phone: string }).phone, 'generate_cycle_run', 'class', undefined, {
     from: startDate, to: endDate, created, restored: toRestore.length, skipped,
   }).catch(() => {});
 

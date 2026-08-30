@@ -62,6 +62,6 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  logAudit((session as { phone: string }).phone, 'template_created', 'class_template', data?.id, { title: data?.title }).catch(() => {});
+  await logAudit((session as { phone: string }).phone, 'template_created', 'class_template', data?.id, { title: data?.title }).catch(() => {});
   return NextResponse.json({ success: true, template: data });
 }

@@ -92,6 +92,6 @@ export async function POST(req: NextRequest) {
   const { error } = await db.from('classes').insert(classes);
   if (error) return NextResponse.json({ error: 'Failed to create classes' }, { status: 500 });
 
-  logAudit((admin as { phone: string }).phone, 'recurring_classes_created', 'class', undefined, { title, created: classes.length, weeks }).catch(() => {});
+  await logAudit((admin as { phone: string }).phone, 'recurring_classes_created', 'class', undefined, { title, created: classes.length, weeks }).catch(() => {});
   return NextResponse.json({ ok: true, created: classes.length });
 }

@@ -45,7 +45,7 @@ export async function PATCH(req: NextRequest) {
   const { error } = await db.from('bookings').update({ attended }).eq('id', bookingId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  logAudit((admin as { phone: string }).phone, attended ? 'attendance_marked' : 'attendance_unmarked', 'booking', bookingId).catch(() => {});
+  await logAudit((admin as { phone: string }).phone, attended ? 'attendance_marked' : 'attendance_unmarked', 'booking', bookingId).catch(() => {});
 
   return NextResponse.json({ success: true });
 }

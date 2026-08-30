@@ -80,6 +80,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { memberId: 
   if (!is_active) patch.sessions_valid_from = new Date().toISOString();
   const { error } = await db.from('members').update(patch).eq('id', params.memberId);
   if (error) return NextResponse.json({ error: 'Update failed' }, { status: 500 });
-  logAudit(admin.phone, is_active ? 'member_activated' : 'member_deactivated', 'member', params.memberId).catch(() => {});
+  await logAudit(admin.phone, is_active ? 'member_activated' : 'member_deactivated', 'member', params.memberId).catch(() => {});
   return NextResponse.json({ success: true });
 }
