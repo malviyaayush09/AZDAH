@@ -81,6 +81,9 @@ export default function DashboardPage() {
   const [rescheduleMode, setRescheduleMode] = useState<string|null>(null);
   const [busyId, setBusyId]         = useState<string|null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(toYMD(new Date()));
+  // The booking screen used to show one day at a time behind a date strip,
+  // which made planning a week impossible — the studio's own complaint.
+  const [weekOffset, setWeekOffset] = useState(0);
   const [trainerFilter, setTrainerFilter] = useState<string>('all');
   // Password modal
   const [stats, setStats] = useState<MemberStats|null>(null);
@@ -135,6 +138,18 @@ export default function DashboardPage() {
     const [mData, cData, sData] = await Promise.all([mRes.json(), cRes.json(), sRes.json()]);
     setMember(mData.member);
     setClasses(cData.upcoming || []);
+    // Land on the first week that actually has classes. Opening on the current
+    // week shows "No classes this week" whenever today is late in the week and
+    // the day's sessions have already run — on a schedule that is in fact full.
+    {
+      const up: ClassSlot[] = cData.upcoming || [];
+      if (up.length) {
+        const monday = (d0: Date) => { const x = new Date(d0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); x.setHours(0,0,0,0); return x; };
+        const first = up.map(c => c.class_date).sort()[0];
+        const weeks = Math.round((monday(new Date(first + 'T00:00:00')).getTime() - monday(new Date()).getTime()) / (7 * 86400000));
+        if (weeks > 0) setWeekOffset(weeks);
+      }
+    }
     setMyBookings(cData.myBookings || []);
     if (sData.total_attended !== undefined) setStats(sData);
     setLoading(false);
@@ -255,6 +270,20 @@ export default function DashboardPage() {
   const dayClasses = classes
     .filter(c=>c.class_date===selectedDate&&(trainerFilter==='all'||c.trainer_name===trainerFilter))
     .sort((a,b)=>a.start_time.localeCompare(b.start_time));
+
+  // Monday-to-Sunday, the way a timetable is read.
+  const weekStart=(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7)+weekOffset*7);d.setHours(0,0,0,0);return d;})();
+  const weekDays=Array.from({length:7},(_,i)=>{const d=new Date(weekStart);d.setDate(d.getDate()+i);return d;});
+  const visibleClasses=classes.filter(c=>trainerFilter==='all'||c.trainer_name===trainerFilter);
+  const byDate=new Map<string,ClassSlot[]>();
+  for(const c of visibleClasses){const l=byDate.get(c.class_date)||[];l.push(c);byDate.set(c.class_date,l);}
+  const lastClassDay=visibleClasses.length?visibleClasses.map(c=>c.class_date).sort().slice(-1)[0]:todayStr;
+  const weekHasAny=weekDays.some(d=>(byDate.get(toYMD(d))||[]).length>0);
+  // Total across every pack. null means a duration-based pack with no limit.
+  const noCreditsLeft = member?.classes_remaining === 0;
+  const weekLabel=(()=>{const a=weekDays[0],b=weekDays[6];
+    const f=(d:Date,y:boolean)=>d.toLocaleDateString('en-IN',{month:'short',...(y?{year:'numeric'}:{})});
+    return a.getMonth()===b.getMonth()?`${a.getDate()} – ${b.getDate()} ${f(b,true)}`:`${a.getDate()} ${f(a,false)} – ${b.getDate()} ${f(b,true)}`;})();
   const nextBooking = myBookings.sort((a,b)=>(a.class_date+a.start_time).localeCompare(b.class_date+b.start_time))[0];
 
   if (loading) return (
@@ -281,6 +310,19 @@ export default function DashboardPage() {
         .dash-in{animation:fadeUp .4s ease forwards}
         .day-btn,.pill,.tab-btn,.book-btn{border:none;font-family:inherit;cursor:pointer}
         .day-btn{transition:background .15s,border-color .15s,transform .12s}
+        .wk-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:9px;align-items:start}
+        .wk-head{display:flex;flex-direction:column;gap:2px;padding-bottom:8px;border-bottom:1px solid}
+        .wk-card{border-radius:8px;padding:10px 11px}
+        .wk-act{width:100%;padding:7px 0;border-radius:7px;font-size:11.5px;font-weight:600;border:none}
+        .wk-btn{width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,255,255,.14);
+          background:none;color:inherit;font-size:14px;cursor:pointer;transition:border-color .2s,opacity .2s}
+        .wk-btn:disabled{opacity:.3;cursor:default}
+        @media(max-width:900px){
+          /* Seven columns will not fit a phone. The week becomes a list of days
+             so every class stays reachable by scrolling instead of hidden. */
+          .wk-grid{grid-template-columns:1fr;gap:20px}
+          .wk-head{flex-direction:row;align-items:baseline;gap:10px}
+        }
         .day-btn:hover{transform:translateY(-2px)}
         .slot-card{transition:border-color .15s,background .15s}
         .slot-card:hover{border-color:#3A2B1E !important;background:#1E1712 !important}
@@ -523,19 +565,15 @@ export default function DashboardPage() {
             {/* ════ BOOK A CLASS ════ */}
             {tab==='book'&&(
               <>
-                {/* Day strip */}
-                <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:6,marginBottom:20}}>
-                  {dayStrip.map(d=>{
-                    const ds=toYMD(d),isSel=ds===selectedDate,isToday=ds===todayStr,hasCls=classes.some(c=>c.class_date===ds);
-                    return(
-                      <button key={ds} className="day-btn" onClick={()=>setSelectedDate(ds)}
-                        style={{flexShrink:0,width:54,height:72,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:3,background:isSel?ORANGE:DARK,border:`1px solid ${isSel?ORANGE:isToday?ORANGE+'50':BORDER}`,borderRadius:12,position:'relative',color:'inherit'}}>
-                        <span style={{fontSize:10,letterSpacing:'.08em',textTransform:'uppercase',color:isSel?'rgba(255,255,255,.75)':isToday?ORANGE:MUTED}}>{d.toLocaleDateString('en-IN',{weekday:'short'})}</span>
-                        <span style={{fontSize:20,fontWeight:700,color:isSel?'#fff':isToday?ORANGE:CREAM,lineHeight:1}}>{d.getDate()}</span>
-                        {hasCls&&!isSel&&<div style={{width:4,height:4,borderRadius:'50%',background:ORANGE,position:'absolute',bottom:8}} />}
-                      </button>
-                    );
-                  })}
+                {/* Week navigation. Replaces a 14-day strip that only ever
+                    showed one day's classes at a time. */}
+                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:18,flexWrap:'wrap'}}>
+                  <button className="wk-btn" onClick={()=>setWeekOffset(w=>w-1)} disabled={weekOffset<=0} aria-label="Previous week">←</button>
+                  <span style={{fontSize:15,fontWeight:600,color:CREAM,minWidth:170}}>{weekLabel}</span>
+                  <button className="wk-btn" onClick={()=>setWeekOffset(w=>w+1)} disabled={toYMD(weekDays[6])>=lastClassDay} aria-label="Next week">→</button>
+                  {weekOffset!==0&&(
+                    <button onClick={()=>setWeekOffset(0)} style={{background:'none',border:'none',color:ORANGE,fontSize:12.5,textDecoration:'underline',cursor:'pointer'}}>This week</button>
+                  )}
                 </div>
 
                 {/* Trainer pills */}
@@ -550,60 +588,82 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
-                  <span style={{fontSize:15,fontWeight:600,color:CREAM}}>{dateLabel(selectedDate,todayStr)}</span>
-                  <span style={{fontSize:12,color:MUTED}}>{new Date(selectedDate+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</span>
-                </div>
+                {rescheduleMode&&(
+                  <div style={{marginBottom:14,padding:'10px 14px',background:'rgba(37,99,235,.08)',border:'1px solid rgba(37,99,235,.25)',borderRadius:8,fontSize:12,color:'#93c5fd'}}>
+                    Pick the class you want to move to.
+                  </div>
+                )}
 
-                {dayClasses.length===0?(
+                {!weekHasAny?(
                   <div style={{textAlign:'center',padding:'64px 0',color:MUTED,fontSize:14}}>
-                    No classes on this day.{' '}
-                    <button onClick={()=>{const next=dayStrip.find(d=>classes.some(c=>c.class_date===toYMD(d)));if(next)setSelectedDate(toYMD(next));}} style={{color:ORANGE,background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontSize:14}}>Find next available →</button>
+                    No classes this week.{' '}
+                    {toYMD(weekDays[6])<lastClassDay&&(
+                      <button onClick={()=>setWeekOffset(w=>w+1)} style={{color:ORANGE,background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontSize:14}}>Try the next one →</button>
+                    )}
                   </div>
                 ):(
-                  <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                    {dayClasses.map(cls=>{
-                      const isBooked=cls.my_booking_status==='confirmed';
-                      const isFull=cls.is_full&&!isBooked;
-                      const isReschedTarget=rescheduleMode!==null;
-                      const hour=parseInt(cls.start_time.split(':')[0]);
-                      const ampm=hour>=12?'PM':'AM';
-                      const h12=hour%12||12;
+                  <div className="wk-grid">
+                    {weekDays.map(d=>{
+                      const ds=toYMD(d);
+                      const list=(byDate.get(ds)||[]).slice().sort((a,b)=>a.start_time.localeCompare(b.start_time));
+                      const isToday=ds===todayStr;
+                      const past=ds<todayStr;
                       return(
-                        <div key={cls.id} className="slot-card" style={{background:DARK,border:`1px solid ${isBooked?'rgba(74,222,128,.2)':BORDER}`,borderRadius:8,padding:'16px 20px',display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
-                          <div style={{width:52,flexShrink:0,textAlign:'center'}}>
-                            <div style={{fontSize:20,fontWeight:700,color:ORANGE,lineHeight:1,letterSpacing:'-.01em'}}>{h12}</div>
-                            <div style={{fontSize:10,color:MUTED,marginTop:1}}>{ampm}</div>
+                        <section key={ds} className="wk-day" style={{opacity:past?.45:1}}>
+                          <div className="wk-head" style={{borderColor:isToday?ORANGE:BORDER}}>
+                            <span style={{fontSize:10.5,letterSpacing:'.16em',textTransform:'uppercase',color:isToday?ORANGE:MUTED}}>{d.toLocaleDateString('en-IN',{weekday:'short'})}</span>
+                            <span style={{fontSize:19,fontWeight:700,color:isToday?ORANGE:CREAM,lineHeight:1}}>{d.getDate()}</span>
                           </div>
-                          <div style={{width:1,height:44,background:BORDER,flexShrink:0}} />
-                          <div style={{flex:1,minWidth:120}}>
-                            <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:3}}>
-                              <span style={{fontSize:15,fontWeight:600,color:CREAM}}>{cls.title}</span>
-                              {isBooked&&<span style={{fontSize:10,background:'rgba(74,222,128,.12)',color:'#4ade80',border:'1px solid rgba(74,222,128,.28)',padding:'2px 8px',borderRadius:999}}>Booked ✓</span>}
-                              {isFull&&!cls.on_waitlist&&<span style={{fontSize:10,background:'rgba(248,113,113,.12)',color:'#f87171',border:'1px solid rgba(248,113,113,.28)',padding:'2px 8px',borderRadius:999}}>Full</span>}
-                              {cls.on_waitlist&&(()=>{const wp=waitlistPos.find(w=>w.classId===cls.id);return(<span style={{fontSize:10,background:'rgba(251,191,36,.12)',color:'#fbbf24',border:'1px solid rgba(251,191,36,.28)',padding:'2px 8px',borderRadius:999}}>{wp?`Waitlist #${wp.position} of ${wp.total}`:'On Waitlist'}</span>);})()}
+                          {list.length===0?(
+                            <p style={{color:MUTED,fontSize:11,margin:'12px 0 0',opacity:.5}}>—</p>
+                          ):(
+                            <div style={{display:'flex',flexDirection:'column',gap:8,marginTop:11}}>
+                              {list.map(cls=>{
+                                const isBooked=cls.my_booking_status==='confirmed';
+                                const isFull=cls.is_full&&!isBooked;
+                                const isReschedTarget=rescheduleMode!==null;
+                                const wp=waitlistPos.find(w=>w.classId===cls.id);
+                                return(
+                                  <article key={cls.id} className="wk-card" style={{background:DARK,border:`1px solid ${isBooked?'rgba(74,222,128,.28)':isFull?'rgba(248,113,113,.22)':BORDER}`}}>
+                                    <div style={{fontSize:11.5,color:ORANGE,fontWeight:600,marginBottom:3}}>{fmtTime(cls.start_time)}</div>
+                                    <div style={{fontSize:12.5,fontWeight:600,color:CREAM,lineHeight:1.3,marginBottom:3}}>{cls.title}</div>
+                                    {cls.trainer_name&&<div style={{fontSize:10.5,color:MUTED,marginBottom:6}}>{cls.trainer_name}</div>}
+
+                                    {isBooked&&<div style={{fontSize:10,color:'#4ade80',fontWeight:600,marginBottom:6}}>Booked ✓</div>}
+                                    {cls.on_waitlist&&<div style={{fontSize:10,color:'#fbbf24',fontWeight:600,marginBottom:6}}>{wp?`Waitlist #${wp.position}`:'On waitlist'}</div>}
+                                    {isFull&&!cls.on_waitlist&&<div style={{fontSize:10,color:'#f87171',fontWeight:600,marginBottom:6}}>Full</div>}
+
+                                    {isReschedTarget?(
+                                      !isBooked&&!isFull?(
+                                        <button className="book-btn wk-act" disabled={busyId===cls.id} onClick={()=>rescheduleClass(rescheduleMode!,cls.id)}
+                                          style={{background:'#2563eb',color:'#fff'}}>
+                                          {busyId===cls.id?'Moving…':'Move here'}
+                                        </button>
+                                      ):null
+                                    ):!isBooked&&!isFull?(
+                                      // Offering "Book" to someone with no credits left just
+                                      // earns them an error. The server still decides; this
+                                      // only stops the pointless click.
+                                      noCreditsLeft?(
+                                        <div style={{fontSize:10.5,color:MUTED,textAlign:'center',padding:'7px 0'}}>No classes left</div>
+                                      ):(
+                                      <button className="book-btn wk-act" disabled={busyId===cls.id} onClick={()=>bookClass(cls.id)}
+                                        style={{background:ORANGE,color:'#fff'}}>
+                                        {busyId===cls.id?'Booking…':'Book'}
+                                      </button>
+                                      )
+                                    ):isFull&&!isBooked?(
+                                      <button className="book-btn wk-act" disabled={busyId===cls.id} onClick={()=>toggleWaitlist(cls)}
+                                        style={{background:cls.on_waitlist?'transparent':'rgba(251,191,36,.15)',color:'#fbbf24',border:'1px solid rgba(251,191,36,.35)'}}>
+                                        {busyId===cls.id?'…':cls.on_waitlist?'Leave':'Waitlist'}
+                                      </button>
+                                    ):null}
+                                  </article>
+                                );
+                              })}
                             </div>
-                            <div style={{fontSize:12,color:MUTED}}>{fmtTime(cls.start_time)} – {fmtTime(cls.end_time)}{cls.trainer_name&&<span style={{color:ORANGE,marginLeft:6}}>· {cls.trainer_name}</span>}</div>
-                          </div>
-                          {isReschedTarget?(
-                            !isBooked&&!isFull?(
-                              <button className="book-btn" disabled={busyId===cls.id} onClick={()=>rescheduleClass(rescheduleMode!,cls.id)}
-                                style={{padding:'10px 20px',background:'#2563eb',color:'#fff',borderRadius:9,fontSize:13,fontWeight:600,flexShrink:0}}>
-                                {busyId===cls.id?'Moving…':'Move Here →'}
-                              </button>
-                            ):null
-                          ):!isBooked&&!isFull?(
-                            <button className="book-btn" disabled={busyId===cls.id} onClick={()=>bookClass(cls.id)}
-                              style={{padding:'10px 22px',background:ORANGE,color:'#fff',borderRadius:9,fontSize:13,fontWeight:600,flexShrink:0}}>
-                              {busyId===cls.id?<span style={{display:'flex',alignItems:'center',gap:6}}><span style={{width:12,height:12,border:'2px solid rgba(255,255,255,.3)',borderTopColor:'#fff',borderRadius:'50%',animation:'spin .7s linear infinite',display:'inline-block'}} />Booking…</span>:'Book Slot'}
-                            </button>
-                          ):isFull&&!isBooked?(
-                            <button className="book-btn" disabled={busyId===cls.id} onClick={()=>toggleWaitlist(cls)}
-                              style={{padding:'10px 16px',background:cls.on_waitlist?'transparent':'rgba(251,191,36,.15)',color:'#fbbf24',border:'1px solid rgba(251,191,36,.35)',borderRadius:9,fontSize:12,fontWeight:600,flexShrink:0}}>
-                              {busyId===cls.id?'…':cls.on_waitlist?'Leave Waitlist':'Join Waitlist'}
-                            </button>
-                          ):null}
-                        </div>
+                          )}
+                        </section>
                       );
                     })}
                   </div>
