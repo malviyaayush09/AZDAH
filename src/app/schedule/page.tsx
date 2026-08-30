@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { IgChip } from '@/components/Instagram';
 
 const DARK = '#15110D';
 const CARD = '#1E1812';
@@ -119,6 +120,7 @@ export default function SchedulePage() {
           <Image src="/azdahlogo.png" alt="AZDAH" width={415} height={124} style={{ height: 22, width: 'auto' }} priority />
         </Link>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <IgChip />
           <Link href="/login" style={{ fontSize: 12.5, color: MUTED, border: `1px solid ${BORDER}`, padding: '8px 14px', borderRadius: 2 }}>Member login</Link>
           <Link href="/#membership" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.08em', background: ORANGE, color: DARK, padding: '9px 16px', borderRadius: 2 }}>JOIN NOW</Link>
         </div>

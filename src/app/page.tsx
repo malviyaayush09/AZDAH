@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase, type MembershipPlan } from '@/lib/supabase';
 import Link from 'next/link';
+import { IgChip, IgIcon, INSTAGRAM, INSTAGRAM_HANDLE } from '@/components/Instagram';
 import Image from 'next/image';
 import { Camera, ChevronDown } from 'lucide-react';
 
@@ -26,8 +27,6 @@ type RazorpayOptions = {
 };
 
 const SERIF = 'var(--font-bodoni), Georgia, "Times New Roman", serif';
-const INSTAGRAM = 'https://instagram.com/azdah.pole';
-const INSTAGRAM_HANDLE = '@azdah.pole';
 const MAPS_QUERY = '10%2F3%2C+Jeevan+Bima+Nagar+Main+Rd%2C+LIC+Colony%2C+Sector+11%2C+New+Thippasandra%2C+Bengaluru%2C+Karnataka+560075';
 const MAPS_LINK = `https://www.google.com/maps?q=${MAPS_QUERY}`;
 const MAPS_EMBED = `https://www.google.com/maps?q=${MAPS_QUERY}&output=embed`;
@@ -63,14 +62,6 @@ const CSS = `
   .anim-fadeup-3 { animation: fadeUp 0.7s 0.3s ease both }
 
   .nav-link:hover { color: ${CREAM} !important }
-  .ig-chip { display: inline-flex; align-items: center; gap: 7px; color: ${MUTED};
-    font-size: 12.5px; letter-spacing: 0.015em; font-weight: 500; white-space: nowrap;
-    transition: color 0.25s ease }
-  .ig-chip:hover { color: ${ORANGE} }
-  .act-rule { display: block; width: 1px; height: 20px; background: rgba(241,233,218,0.14) }
-  /* The handle is the first thing to go when the bar gets tight -- the mobile
-     menu and the contact block both still carry it. */
-  @media (max-width: 1080px) { .ig-chip, .act-rule { display: none } }
   .plan-card:hover { border-color: rgba(248,52,51,0.5) !important; transform: translateY(-3px); transition: all 0.2s }
   .plan-card { transition: all 0.2s }
   .btn-orange:hover { background: #D8281F !important }
@@ -184,18 +175,6 @@ const TESTIMONIALS = [
     role: 'Google review',
   },
 ];
-
-// Instagram's glyph, inline: one more network request for a logo is not worth it.
-function IgIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8"
-      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <rect x="2" y="2" width="20" height="20" rx="5" />
-      <circle cx="12" cy="12" r="4" />
-      <circle cx="17.5" cy="6.5" r="1.1" fill={color} stroke="none" />
-    </svg>
-  );
-}
 
 export default function HomePage() {
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
@@ -431,15 +410,7 @@ export default function HomePage() {
 
           {/* Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Instagram belongs with the actions, not among the text links.
-                Showing the handle rather than a bare glyph gives people
-                something to remember as well as something to click. */}
-            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="ig-chip mob-hide"
-              aria-label="AZDAH on Instagram, @azdah.pole">
-              <IgIcon size={15} />
-              <span>{INSTAGRAM_HANDLE}</span>
-            </a>
-            <span className="act-rule mob-hide" aria-hidden="true" />
+            <IgChip className="mob-hide" />
             <Link href="/login" style={{ border: '1px solid rgba(241,233,218,0.2)', color: CREAM, fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 2 }} className="mob-hide">
               Member login
             </Link>

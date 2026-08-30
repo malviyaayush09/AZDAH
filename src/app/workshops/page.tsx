@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { IgChip } from '@/components/Instagram';
 
 // Razorpay checkout is loaded from their CDN at runtime. We don't augment the
 // global Window here (the landing page already does, with a different options
@@ -202,6 +203,7 @@ export default function WorkshopsPage() {
           </Link>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <Link href="/" style={{ color: MUTED, fontSize: 13.5, fontWeight: 500 }}>← Home</Link>
+            <IgChip />
             <Link href="/login" style={{ border: '1px solid rgba(241,233,218,0.2)', color: CREAM, fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 2 }}>
               Member login
             </Link>
