@@ -63,6 +63,14 @@ const CSS = `
   .anim-fadeup-3 { animation: fadeUp 0.7s 0.3s ease both }
 
   .nav-link:hover { color: ${CREAM} !important }
+  .ig-chip { display: inline-flex; align-items: center; gap: 7px; color: ${MUTED};
+    font-size: 12.5px; letter-spacing: 0.015em; font-weight: 500; white-space: nowrap;
+    transition: color 0.25s ease }
+  .ig-chip:hover { color: ${ORANGE} }
+  .act-rule { display: block; width: 1px; height: 20px; background: rgba(241,233,218,0.14) }
+  /* The handle is the first thing to go when the bar gets tight -- the mobile
+     menu and the contact block both still carry it. */
+  @media (max-width: 1080px) { .ig-chip, .act-rule { display: none } }
   .plan-card:hover { border-color: rgba(248,52,51,0.5) !important; transform: translateY(-3px); transition: all 0.2s }
   .plan-card { transition: all 0.2s }
   .btn-orange:hover { background: #D8281F !important }
@@ -413,11 +421,6 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
-            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="nav-link"
-              aria-label="AZDAH on Instagram"
-              style={{ color: MUTED, display: 'inline-flex', alignItems: 'center' }}>
-              <IgIcon size={17} />
-            </a>
             <Link href="/schedule" className="nav-link" style={{ color: MUTED, fontSize: 13.5, letterSpacing: '0.025em', fontWeight: 500 }}>
               Schedule
             </Link>
@@ -428,6 +431,15 @@ export default function HomePage() {
 
           {/* Actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* Instagram belongs with the actions, not among the text links.
+                Showing the handle rather than a bare glyph gives people
+                something to remember as well as something to click. */}
+            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="ig-chip mob-hide"
+              aria-label="AZDAH on Instagram, @azdah.pole">
+              <IgIcon size={15} />
+              <span>{INSTAGRAM_HANDLE}</span>
+            </a>
+            <span className="act-rule mob-hide" aria-hidden="true" />
             <Link href="/login" style={{ border: '1px solid rgba(241,233,218,0.2)', color: CREAM, fontSize: 13, fontWeight: 600, padding: '8px 16px', borderRadius: 2 }} className="mob-hide">
               Member login
             </Link>
