@@ -3,6 +3,7 @@ export const runtime = 'edge';
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
+import { todayIST } from '@/lib/date';
 
 type PackRow = {
   id: string; member_id: string; plan_name: string;
@@ -53,9 +54,24 @@ export async function GET(req: NextRequest) {
     if (b.pack_id) usedByPack.set(b.pack_id, (usedByPack.get(b.pack_id) || 0) + 1);
   }
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().slice(0, 10);
+  // todayIST, not toISOString on a local Date: the servers run in UTC, so
+  // between 18:30 and midnight UTC it is already tomorrow in India and packs
+  // that expired were still being reported live.
+  const todayStr = todayIST();
+  // Same basis as plan_end, which parses as UTC midnight, so the difference is
+  // a whole number of days rather than a fraction that rounds unpredictably.
+  const today = new Date(todayStr);
+
+  // How many bookings each member has ever made. The admin screen uses this to
+  // decide whether a member can be deleted outright: someone with bookings has
+  // history worth keeping, and only gets deactivated.
+  const { data: bookingRows } = memberIds.length
+    ? await db.from('bookings').select('member_id').in('member_id', memberIds)
+    : { data: [] as { member_id: string }[] };
+  const bookingCount = new Map<string, number>();
+  for (const b of bookingRows || []) {
+    bookingCount.set(b.member_id, (bookingCount.get(b.member_id) || 0) + 1);
+  }
 
   const packsByMember = new Map<string, ReturnType<typeof shapePack>[]>();
   function shapePack(p: PackRow) {
@@ -93,6 +109,7 @@ export async function GET(req: NextRequest) {
       reschedule_used: m.reschedule_used_this_month,
       packs,
       live_pack_count: live.length,
+      booking_count: bookingCount.get(m.id) || 0,
       classes_remaining: live.some((p) => p.remaining === null)
         ? null
         : live.reduce((sum, p) => sum + (p.remaining || 0), 0),

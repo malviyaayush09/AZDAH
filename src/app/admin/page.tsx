@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send } from 'lucide-react';
+import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 
 type MemberPack = {
@@ -19,7 +19,16 @@ type Member = {
   created_at: string;
   packs?: MemberPack[];
   live_pack_count?: number;
+  booking_count?: number;
   classes_remaining?: number | null;
+};
+
+// One confirmed booking, flattened across bookings + members + classes.
+type AdminBooking = {
+  id: string; class_id: string; title: string; trainer_name: string | null;
+  class_date: string; start_time: string; category: string | null;
+  member_id: string; member_name: string; member_phone: string;
+  plan_name: string | null; attended: boolean | null;
 };
 
 type ClassSlot = {
@@ -155,6 +164,19 @@ export default function AdminPage() {
   const [weekStart, setWeekStart] = useState<Date>(() => mondayOf(new Date()));
   const [viewingClass, setViewingClass] = useState<ClassSlot | null>(null);
   const [classBookings, setClassBookings] = useState<ClassBooking[]>([]);
+  // Every confirmed booking in the visible week. Loaded up front so the
+  // calendar can show who is in each class, and be filtered by instructor,
+  // member or plan, without opening one class at a time.
+  const [weekBookings, setWeekBookings] = useState<AdminBooking[]>([]);
+  const [calTrainer, setCalTrainer] = useState('all');
+  const [calMember, setCalMember] = useState('all');
+  const [calPlan, setCalPlan] = useState('all');
+  const [showNames, setShowNames] = useState(true);
+  // Members tab: which row is expanded, and the dates behind it.
+  const [openMember, setOpenMember] = useState<string | null>(null);
+  const [memberDates, setMemberDates] = useState<Record<string, AdminBooking[]>>({});
+  const [datesBusy, setDatesBusy] = useState<string | null>(null);
+  const [memberStatus, setMemberStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [newClass, setNewClass] = useState({ title:'', trainer_name:'', class_date:'', start_time:'', end_time:'', capacity:'20' });
   // Kept out of `newClass` so the existing text-input loop below stays untouched.
@@ -735,7 +757,101 @@ export default function AdminPage() {
   const todayStr = toYMD(new Date());
   const trainerNames = Array.from(new Set(classes.map(c => c.trainer_name).filter(Boolean) as string[]));
   const trainerColor = (name: string | null) => name ? PALETTE[trainerNames.indexOf(name) % PALETTE.length] : MUTED;
-  const filteredMembers = members.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.phone.includes(search));
+  // Bookings for the week on screen. Refetched whenever the week moves.
+  useEffect(() => {
+    const days = getWeekDates(weekStart);
+    const from = toYMD(days[0]), to = toYMD(days[6]);
+    let cancelled = false;
+    fetch(`/api/admin/bookings?from=${from}&to=${to}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled) setWeekBookings(d?.bookings || []); })
+      .catch(() => { if (!cancelled) setWeekBookings([]); });
+    return () => { cancelled = true; };
+  }, [weekStart]);
+
+  const bookingsByClass = new Map<string, AdminBooking[]>();
+  for (const b of weekBookings) {
+    const l = bookingsByClass.get(b.class_id) || [];
+    l.push(b); bookingsByClass.set(b.class_id, l);
+  }
+
+  // Trainer names are trimmed: the data holds both 'AZDAH' and 'AZDAH ',
+  // which would otherwise appear as two different instructors.
+  const trainerOptions = Array.from(new Set(
+    classes.map(c => (c.trainer_name || '').trim()).filter(Boolean))).sort();
+  const memberOptions = Array.from(new Map(
+    members.map(m => [m.id, m.name] as const)).entries())
+    .sort((a, b) => a[1].localeCompare(b[1]));
+  const planOptions = Array.from(new Set(
+    weekBookings.map(b => b.plan_name).filter(Boolean) as string[])).sort();
+  const calFiltered = calTrainer !== 'all' || calMember !== 'all' || calPlan !== 'all';
+
+  function calMatch(cls: ClassSlot) {
+    if (calTrainer !== 'all' && (cls.trainer_name || '').trim() !== calTrainer) return false;
+    if (calMember === 'all' && calPlan === 'all') return true;
+    const bs = bookingsByClass.get(cls.id) || [];
+    if (calMember !== 'all' && !bs.some(b => b.member_id === calMember)) return false;
+    if (calPlan !== 'all' && !bs.some(b => b.plan_name === calPlan)) return false;
+    return true;
+  }
+
+  // A member's own dates, fetched once per member and kept.
+  // Only offered where nothing would be destroyed; the server checks again.
+  const [orphanBusy, setOrphanBusy] = useState<string | null>(null);
+
+  // The warning goes away on its own once the account exists or the payment is
+  // refunded. This is for the third case: already sorted out some other way.
+  async function resolveOrphan(o: { order_id: string; name: string }) {
+    if (!confirm(`Hide the warning for ${o.name}?
+
+Only do this if you have already sorted it out — set them up under another number, or refunded them. The payment itself is not touched, and the audit log records this.`)) return;
+    setOrphanBusy(o.order_id);
+    const res = await fetch('/api/admin/orphaned-payments/resolve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: o.order_id }),
+    });
+    setOrphanBusy(null);
+    if (res.ok) {
+      setMemberOrphans(p => p.filter(x => x.order_id !== o.order_id));
+      setMsg({ text: `Marked ${o.name}'s payment as handled.`, ok: true });
+    } else {
+      setMsg({ text: 'Could not mark that as handled.', ok: false });
+    }
+  }
+
+  async function deleteMember(m: Member) {
+    if (!confirm(`Delete ${m.name} (${m.phone}) permanently?
+
+They have no bookings and no payments, so nothing is lost. This cannot be undone.`)) return;
+    setMemberActionBusy(m.id + '-del');
+    const res = await fetch(`/api/admin/members/${m.id}`, { method: 'DELETE' });
+    const d = await res.json().catch(() => ({}));
+    setMemberActionBusy(null);
+    if (res.ok && d.success) {
+      setMsg({ text: `${d.name} deleted.`, ok: true });
+      setOpenMember(null);
+      fetchAll();
+    } else {
+      setMsg({ text: d.error || 'Could not delete that member.', ok: false });
+    }
+  }
+
+  async function toggleMemberDates(id: string) {
+    if (openMember === id) { setOpenMember(null); return; }
+    setOpenMember(id);
+    if (memberDates[id]) return;
+    setDatesBusy(id);
+    try {
+      const r = await fetch(`/api/admin/bookings?member_id=${id}`);
+      const d = r.ok ? await r.json() : null;
+      setMemberDates(p => ({ ...p, [id]: d?.bookings || [] }));
+    } catch { setMemberDates(p => ({ ...p, [id]: [] })); }
+    setDatesBusy(null);
+  }
+
+  const filteredMembers = members
+    .filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.phone.includes(search))
+    .filter(m => memberStatus === 'all' || (memberStatus === 'active' ? m.is_active : !m.is_active));
   const weekClassCount = classes.filter(c => {
     const d = new Date(c.class_date + 'T00:00:00');
     return !c.is_cancelled && d >= weekDates[0] && d <= weekDates[6];
@@ -795,6 +911,7 @@ export default function AdminPage() {
             <div style={{ fontSize:12, color:'#d99', marginBottom:12, lineHeight:1.5 }}>
               Razorpay captured the money but the member was never set up — usually the browser closed mid-payment.
               Either create the member manually and share their login, or refund the payment in Razorpay.
+              This clears itself once the account exists or the payment is refunded.
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {memberOrphans.map(o => (
@@ -811,6 +928,11 @@ export default function AdminPage() {
                     style={{ marginLeft:'auto', fontSize:11, fontWeight:600, color:'#4ade80', border:'1px solid rgba(74,222,128,.3)', borderRadius:5, padding:'5px 10px', textDecoration:'none' }}>
                     WhatsApp them
                   </a>
+                  <button onClick={() => resolveOrphan(o)} disabled={orphanBusy === o.order_id}
+                    title="Hide this warning — the payment is untouched"
+                    style={{ fontSize:11, fontWeight:600, color:MUTED, border:`1px solid ${BORDER}`, borderRadius:5, padding:'5px 10px', background:'none', cursor:'pointer' }}>
+                    {orphanBusy === o.order_id ? '…' : 'Already handled'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -967,12 +1089,51 @@ export default function AdminPage() {
                 </span>
               </div>
 
+              {/* Filters. The studio had to open every class to find out who
+                  was in it; picking a member now leaves only their classes. */}
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center', marginBottom:14 }}>
+                <select value={calTrainer} onChange={e => setCalTrainer(e.target.value)} style={{ background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:6, padding:'7px 10px', fontSize:12, maxWidth:190 }}>
+                  <option value="all">All instructors</option>
+                  {trainerOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select value={calMember} onChange={e => setCalMember(e.target.value)} style={{ background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:6, padding:'7px 10px', fontSize:12, maxWidth:190 }}>
+                  <option value="all">All members</option>
+                  {memberOptions.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+                </select>
+                <select value={calPlan} onChange={e => setCalPlan(e.target.value)} style={{ background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:6, padding:'7px 10px', fontSize:12, maxWidth:190 }}>
+                  <option value="all">All plans</option>
+                  {planOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MUTED, cursor:'pointer' }}>
+                  <input type="checkbox" checked={showNames} onChange={e => setShowNames(e.target.checked)} />
+                  Show who&apos;s booked
+                </label>
+                {calFiltered && (
+                  <button onClick={() => { setCalTrainer('all'); setCalMember('all'); setCalPlan('all'); }}
+                    style={{ background:'none', border:'none', color:ORANGE, fontSize:12, textDecoration:'underline', cursor:'pointer' }}>
+                    Clear filters
+                  </button>
+                )}
+                <span style={{ marginLeft:'auto', fontSize:12, color:MUTED }}>
+                  {weekBookings.length} booking{weekBookings.length !== 1 ? 's' : ''} this week
+                </span>
+              </div>
+
+              {/* A filter that matches nothing looks identical to an empty
+                  week, so say which it is. */}
+              {calFiltered && !weekDates.some(d => classes.some(c =>
+                  c.class_date === toYMD(d) && !c.is_cancelled && calMatch(c))) && (
+                <div style={{ padding:'14px 16px', marginBottom:12, background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, fontSize:12.5, color:MUTED }}>
+                  Nothing matches these filters this week. Try Prev/Next, or clear them.
+                </div>
+              )}
+
               {/* 7-column grid */}
               <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
                 {weekDates.map((date, i) => {
                   const ds = toYMD(date);
                   const isToday = ds === todayStr;
-                  const dayClasses = classes.filter(c => c.class_date === ds && !c.is_cancelled)
+                  const dayClasses = classes.filter(c => c.class_date === ds && !c.is_cancelled && calMatch(c))
                     .sort((a,b) => a.start_time.localeCompare(b.start_time));
                   const dayCancelled = classes.filter(c => c.class_date === ds && c.is_cancelled)
                     .sort((a,b) => a.start_time.localeCompare(b.start_time));
@@ -1003,6 +1164,28 @@ export default function AdminPage() {
                                 <div style={{ height:'100%', width:`${pct}%`, background:tc, borderRadius:999, transition:'width .3s' }} />
                               </div>
                               <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{cls.booked_count}/{cls.capacity} booked</div>
+                              {showNames && (() => {
+                                const bs = bookingsByClass.get(cls.id) || [];
+                                if (!bs.length) return null;
+                                // Four fits the column; the rest are a count so
+                                // the card keeps its height.
+                                const shown = bs.slice(0, 4);
+                                return (
+                                  <div style={{ marginTop:5, paddingTop:5, borderTop:`1px solid ${tc}22`, display:'flex', flexDirection:'column', gap:1 }}>
+                                    {shown.map(b => (
+                                      <div key={b.id} title={`${b.member_name} — ${b.plan_name || 'no pack'}`}
+                                        style={{ fontSize:9.5, color: calMember !== 'all' && b.member_id === calMember ? ORANGE : MUTED,
+                                          fontWeight: calMember !== 'all' && b.member_id === calMember ? 700 : 400,
+                                          overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                        {b.member_name}
+                                      </div>
+                                    ))}
+                                    {bs.length > shown.length && (
+                                      <div style={{ fontSize:9.5, color:MUTED, opacity:.75 }}>+{bs.length - shown.length} more</div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                               <button
                                 onClick={e => { e.stopPropagation(); duplicateClass(cls); }}
                                 disabled={dupBusy === cls.id}
@@ -1128,6 +1311,28 @@ export default function AdminPage() {
               </button>
             </div>
 
+            <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+              {([['all','Everyone'],['active','Active'],['inactive','Inactive']] as const).map(([k,l]) => {
+                const n = k === 'all' ? members.length : members.filter(m => k === 'active' ? m.is_active : !m.is_active).length;
+                const on = memberStatus === k;
+                return (
+                  <button key={k} onClick={() => { setMemberStatus(k); setOpenMember(null); }}
+                    style={{ padding:'7px 14px', borderRadius:999, fontSize:12, fontWeight:500, cursor:'pointer',
+                      border:`1px solid ${on ? ORANGE : BORDER}`, background: on ? `${ORANGE}18` : 'transparent', color: on ? ORANGE : MUTED }}>
+                    {l} <span style={{ opacity:.7 }}>{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {memberStatus === 'inactive' && (
+              <div style={{ marginBottom:12, padding:'10px 14px', background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, fontSize:12, color:MUTED, lineHeight:1.55 }}>
+                Inactive members are already hidden from the Active list. A member who has booked a class or paid
+                can only stay deactivated — deleting them would take their class and revenue history with them.
+                The bin appears on test or duplicate entries, which have neither.
+              </div>
+            )}
+
             <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
               <div style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 1fr', padding:'10px 16px', background:'#131009', borderBottom:`1px solid ${BORDER}` }}>
                 {['Member','Plan','Joined','Expires','Status','Actions'].map(h => (
@@ -1138,7 +1343,10 @@ export default function AdminPage() {
                 <div style={{ padding:'48px 0', textAlign:'center', color:MUTED, fontSize:13 }}>No members found.</div>
               ) : (
                 filteredMembers.map((m, i) => (
-                  <div key={m.id} className="mrow" style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 1fr', padding:'13px 16px', borderBottom: i < filteredMembers.length-1 ? `1px solid ${BORDER}` : 'none', alignItems:'center', background:'transparent' }}>
+                  <div key={m.id} style={{ borderBottom: i < filteredMembers.length-1 ? `1px solid ${BORDER}` : 'none' }}>
+                  <div className="mrow" onClick={() => toggleMemberDates(m.id)}
+                    title="Show the classes this member is booked into"
+                    style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 1fr', padding:'13px 16px', alignItems:'center', background: openMember === m.id ? 'rgba(248,52,51,.05)' : 'transparent', cursor:'pointer' }}>
                     <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
                       <div style={{ width:34, height:34, borderRadius:'50%', background:avatarColor(m.name), display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:'#fff', flexShrink:0 }}>
                         {initials(m.name)}
@@ -1171,7 +1379,7 @@ export default function AdminPage() {
                     <span style={{ fontSize:11, padding:'3px 8px', borderRadius:999, background: m.is_active ? 'rgba(74,222,128,.1)' : 'rgba(248,113,113,.1)', color: m.is_active ? '#4ade80' : '#f87171', border:`1px solid ${m.is_active ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.25)'}` }}>
                       {m.is_active ? 'Active' : 'Inactive'}
                     </span>
-                    <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                    <div onClick={e => e.stopPropagation()} style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                       <a href={`https://wa.me/${m.phone}`} target="_blank" rel="noopener noreferrer" className="abtn"
                         title="WhatsApp Chat"
                         style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(74,222,128,.3)', color:'#4ade80', borderRadius:5, textDecoration:'none', display:'inline-flex', alignItems:'center' }}><MessageCircle size={11} strokeWidth={1.5} /></a>
@@ -1191,6 +1399,14 @@ export default function AdminPage() {
                         style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
                         <Snowflake size={10} strokeWidth={1.5} />
                       </button>
+                      {m.booking_count === 0 && !m.razorpay_payment_id && (
+                        <button onClick={() => deleteMember(m)} className="abtn"
+                          disabled={memberActionBusy === m.id + '-del'}
+                          title="Delete permanently — no bookings or payments to lose"
+                          style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(248,113,113,.3)', color:'#f87171', borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
+                          <Trash2 size={10} strokeWidth={1.5} />
+                        </button>
+                      )}
                       {m.razorpay_payment_id && (
                         <button onClick={() => setRefundModal(m)} className="abtn"
                           title="Issue refund"
@@ -1199,6 +1415,49 @@ export default function AdminPage() {
                         </button>
                       )}
                     </div>
+                  </div>
+
+                  {openMember === m.id && (
+                    <div style={{ padding:'4px 16px 16px 60px', background:'rgba(0,0,0,.18)' }}>
+                      {datesBusy === m.id ? (
+                        <div style={{ fontSize:12, color:MUTED, padding:'10px 0' }}>Loading their classes…</div>
+                      ) : !(memberDates[m.id] || []).length ? (
+                        <div style={{ fontSize:12, color:MUTED, padding:'10px 0' }}>No classes booked.</div>
+                      ) : (() => {
+                        const all = memberDates[m.id];
+                        const today = toYMD(new Date());
+                        const next = all.filter(b => b.class_date >= today);
+                        const past = all.filter(b => b.class_date < today);
+                        const line = (b: AdminBooking, dim: boolean) => (
+                          <div key={b.id} style={{ display:'flex', gap:10, alignItems:'baseline', flexWrap:'wrap', fontSize:12, padding:'4px 0', opacity: dim ? .5 : 1 }}>
+                            <span style={{ color:CREAM, fontWeight:600, minWidth:104 }}>{fmtDate(b.class_date)}</span>
+                            <span style={{ color:ORANGE, minWidth:64 }}>{fmtTime(b.start_time)}</span>
+                            <span style={{ color:CREAM }}>{b.title}</span>
+                            {b.trainer_name && <span style={{ color:MUTED, fontSize:11 }}>{b.trainer_name.trim()}</span>}
+                            {b.plan_name && <span style={{ color:MUTED, fontSize:11 }}>· {b.plan_name}</span>}
+                            {dim && b.attended && <span style={{ color:'#4ade80', fontSize:11 }}>· attended</span>}
+                          </div>
+                        );
+                        return (
+                          <>
+                            <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600, margin:'8px 0 4px' }}>
+                              Coming up — {next.length}
+                            </div>
+                            {next.length ? next.map(b => line(b, false))
+                              : <div style={{ fontSize:12, color:MUTED, padding:'4px 0' }}>Nothing booked ahead.</div>}
+                            {past.length > 0 && (
+                              <>
+                                <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600, margin:'14px 0 4px' }}>
+                                  Already been — {past.length}
+                                </div>
+                                {past.slice(-6).reverse().map(b => line(b, true))}
+                              </>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                   </div>
                 ))
               )}

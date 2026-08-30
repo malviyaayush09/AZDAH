@@ -52,6 +52,9 @@ export async function GET(req: NextRequest) {
     .from('payment_intents')
     .select('order_id, phone, name, email, amount_paise, status, created_at')
     .eq('intent_type', 'membership')
+    // 'resolved' is written by the resolve route when the studio says they have
+    // dealt with one by hand. Nothing else ever writes it.
+    .neq('status', 'resolved')
     .gte('created_at', since)
     .lte('created_at', settleCutoff)
     .order('created_at', { ascending: false })
@@ -78,9 +81,14 @@ export async function GET(req: NextRequest) {
         headers: { Authorization: authHeader, Accept: 'application/json' },
       });
       if (!res.ok) continue;
-      const body = await res.json() as { items?: { id: string; status: string; amount: number }[] };
+      const body = await res.json() as {
+        items?: { id: string; status: string; amount: number; amount_refunded?: number }[];
+      };
       const captured = (body.items || []).find((p) => p.status === 'captured');
       if (!captured) continue; // abandoned checkout, not an orphan
+      // Refunded in full means the studio already settled it. Reporting it
+      // would leave a warning nobody can clear by doing the right thing.
+      if ((captured.amount_refunded ?? 0) >= captured.amount) continue;
 
       orphans.push({
         order_id: intent.order_id,
