@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
     .gte('class_date', today)
     .order('class_date', { ascending: true })
     .order('start_time', { ascending: true })
-    .limit(60);
+    .limit(400);
   if (allowed && allowed.length) classQuery = classQuery.in('category', allowed);
 
   const [classRes, bookingRes, waitlistRes] = await Promise.all([

@@ -94,7 +94,12 @@ export default function DashboardPage() {
   const [waitlistPos, setWaitlistPos] = useState<WaitlistPos[]>([]);
 
   const todayStr = toYMD(new Date());
-  const days14 = Array.from({length:14},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; });
+  // Cover the whole published schedule, not a fixed fortnight. A hard 14-day
+  // strip silently hid every class beyond it once a longer cycle went up.
+  const lastClassDate = classes.reduce((m,c)=>c.class_date>m?c.class_date:m, todayStr);
+  const spanDays = Math.min(180, Math.max(14,
+    Math.round((new Date(lastClassDate+'T00:00:00').getTime() - new Date(todayStr+'T00:00:00').getTime())/86400000) + 1));
+  const dayStrip = Array.from({length:spanDays},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()+i); return d; });
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -481,7 +486,7 @@ export default function DashboardPage() {
               <>
                 {/* Day strip */}
                 <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:6,marginBottom:20}}>
-                  {days14.map(d=>{
+                  {dayStrip.map(d=>{
                     const ds=toYMD(d),isSel=ds===selectedDate,isToday=ds===todayStr,hasCls=classes.some(c=>c.class_date===ds);
                     return(
                       <button key={ds} className="day-btn" onClick={()=>setSelectedDate(ds)}
@@ -514,7 +519,7 @@ export default function DashboardPage() {
                 {dayClasses.length===0?(
                   <div style={{textAlign:'center',padding:'64px 0',color:MUTED,fontSize:14}}>
                     No classes on this day.{' '}
-                    <button onClick={()=>{const next=days14.find(d=>classes.some(c=>c.class_date===toYMD(d)));if(next)setSelectedDate(toYMD(next));}} style={{color:ORANGE,background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontSize:14}}>Find next available →</button>
+                    <button onClick={()=>{const next=dayStrip.find(d=>classes.some(c=>c.class_date===toYMD(d)));if(next)setSelectedDate(toYMD(next));}} style={{color:ORANGE,background:'none',border:'none',cursor:'pointer',textDecoration:'underline',fontSize:14}}>Find next available →</button>
                   </div>
                 ):(
                   <div style={{display:'flex',flexDirection:'column',gap:10}}>
