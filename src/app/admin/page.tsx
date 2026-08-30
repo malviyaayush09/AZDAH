@@ -969,18 +969,47 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
           transition:background .15s,color .15s}
         .anav:hover{background:rgba(255,255,255,.04)}
         .anav-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;transition:background .15s}
-        @media(max-width:860px){ .ashell{flex-direction:column} }
+        /* Everything below fights an inline style, so it has to shout. The
+           sidebar's padding, flex and overflow are all set on the elements
+           themselves, and a media query loses to those without !important --
+           which is why the strip only half-appeared on a phone. */
+        @media(max-width:860px){
+          .ashell{flex-direction:column}
+          .acontent{padding:16px 14px 48px !important}
+        }
         @media(max-width:860px){
           /* The sidebar becomes a scrolling strip along the top rather than
              stealing a fifth of a phone screen. */
-          .asidebar{position:static;width:100%;height:auto;flex-direction:row;align-items:center;
-            overflow-x:auto;border-right:none;border-bottom:1px solid ${BORDER}}
-          .asidebar>div:first-child{padding:12px 14px}
-          .asidebar nav{display:flex;gap:4px;padding:0 8px;overflow-x:auto}
-          .asidebar nav>div{display:flex;gap:4px;margin-bottom:0 !important}
+          /* Two rows: brand and logout share the first, the tabs get the whole
+             width of the second. Kept on one row, the brand and logout left the
+             tabs about 170px of 390 and only the first two were reachable. */
+          .asidebar{position:static;width:100%;height:auto;flex-direction:row;flex-wrap:wrap;
+            align-items:center;overflow:visible;border-right:none;border-bottom:1px solid ${BORDER}}
+          .asidebar>div:first-child{padding:10px 12px !important;flex:1 1 auto}
+          .asidebar nav{display:flex;gap:4px;padding:6px !important;overflow-x:auto;
+            flex:0 0 100% !important;order:3;overflow-y:hidden !important;
+            -webkit-overflow-scrolling:touch;border-top:1px solid ${BORDER}}
+          .asidebar nav>div{display:flex;gap:4px;margin-bottom:0 !important;flex-shrink:0}
           .asidebar nav>div>div:first-child{display:none}
-          .anav{width:auto;white-space:nowrap}
-          .asidebar>div:last-child{border-top:none;padding:0 14px}
+          .anav{width:auto;white-space:nowrap;padding:7px 11px}
+          .asidebar>div:last-child{border-top:none !important;padding:0 12px !important;flex-shrink:0}
+        }
+
+        /* Fixed column counts that a phone cannot hold. */
+        @media(max-width:760px){
+          .kpi-row{grid-template-columns:repeat(2,1fr) !important}
+          /* The week grid keeps its seven columns and scrolls sideways rather
+             than crushing them; Day is the default view on a phone anyway. */
+          .wk7{overflow-x:auto;grid-auto-columns:minmax(122px,1fr);
+            grid-template-columns:none !important;grid-auto-flow:column}
+          /* The members table stops being a table: six columns in 360px is
+             unreadable, so each member becomes a stacked block. */
+          .mhead{display:none !important}
+          .mrow{grid-template-columns:1fr !important;gap:7px;padding:14px 14px !important}
+        }
+        @media(max-width:420px){
+          .dstrip{gap:3px}
+          .dpick{padding:9px 2px 8px}
         }
         .atab{transition:color .15s;background:none;border:none;cursor:pointer;font-family:inherit}
         .atab:hover{color:${CREAM} !important}
@@ -1062,7 +1091,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
           </div>
         </aside>
 
-      <div style={{ flex:1, minWidth:0, padding:'26px 30px 60px' }}>
+      <div className="acontent" style={{ flex:1, minWidth:0, padding:'26px 30px 60px' }}>
 
         {/* ── Heading, named by wherever she is ── */}
         <h1 style={{ fontFamily:SERIF, fontSize:30, fontWeight:800, color:CREAM, margin:'0 0 5px', lineHeight:1.05, letterSpacing:'-.01em' }}>{TITLES[tab][0]}</h1>
@@ -1200,7 +1229,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
 
         {/* ── KPI Row ── */}
         {stats && (
-          <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:16 }}>
+          <div className="kpi-row" style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:12, overflow:'hidden', display:'grid', gridTemplateColumns:'repeat(4,1fr)', marginBottom:16 }}>
             {[
               { Icon: Users,        label:'Total Members',      value: stats.total_members,  color: CREAM },
               { Icon: CheckCircle2, label:'Active Members',     value: stats.active_members, color: '#4ade80' },
@@ -1546,7 +1575,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
               )}
 
               {/* 7-column grid */}
-              <div style={{ display: calView === 'week' ? 'grid' : 'none', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
+              <div className="wk7" style={{ display: calView === 'week' ? 'grid' : 'none', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
                 {weekDates.map((date, i) => {
                   const ds = toYMD(date);
                   const isToday = ds === todayStr;
@@ -1766,7 +1795,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
             )}
 
             <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, overflow:'hidden' }}>
-              <div style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 1fr', padding:'10px 16px', background:'#131009', borderBottom:`1px solid ${BORDER}` }}>
+              <div className="mhead" style={{ display:'grid', gridTemplateColumns:'2fr 1.2fr 1fr 1.2fr .7fr 1fr', padding:'10px 16px', background:'#131009', borderBottom:`1px solid ${BORDER}` }}>
                 {['Member','Plan','Joined','Expires','Status','Actions'].map(h => (
                   <span key={h} style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600 }}>{h}</span>
                 ))}
