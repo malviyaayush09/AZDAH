@@ -26,6 +26,8 @@ type RazorpayOptions = {
 };
 
 const SERIF = 'var(--font-bodoni), Georgia, "Times New Roman", serif';
+const INSTAGRAM = 'https://instagram.com/azdah.pole';
+const INSTAGRAM_HANDLE = '@azdah.pole';
 const MAPS_QUERY = '10%2F3%2C+Jeevan+Bima+Nagar+Main+Rd%2C+LIC+Colony%2C+Sector+11%2C+New+Thippasandra%2C+Bengaluru%2C+Karnataka+560075';
 const MAPS_LINK = `https://www.google.com/maps?q=${MAPS_QUERY}`;
 const MAPS_EMBED = `https://www.google.com/maps?q=${MAPS_QUERY}&output=embed`;
@@ -174,6 +176,18 @@ const TESTIMONIALS = [
     role: 'Google review',
   },
 ];
+
+// Instagram's glyph, inline: one more network request for a logo is not worth it.
+function IgIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <rect x="2" y="2" width="20" height="20" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="1.1" fill={color} stroke="none" />
+    </svg>
+  );
+}
 
 export default function HomePage() {
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
@@ -399,6 +413,11 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
+            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer" className="nav-link"
+              aria-label="AZDAH on Instagram"
+              style={{ color: MUTED, display: 'inline-flex', alignItems: 'center' }}>
+              <IgIcon size={17} />
+            </a>
             <Link href="/schedule" className="nav-link" style={{ color: MUTED, fontSize: 13.5, letterSpacing: '0.025em', fontWeight: 500 }}>
               Schedule
             </Link>
@@ -433,6 +452,10 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
+            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: 9, color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
+              <IgIcon size={16} />{INSTAGRAM_HANDLE}
+            </a>
             <Link href="/schedule" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
               Schedule
             </Link>
@@ -875,6 +898,9 @@ export default function HomePage() {
           url: 'https://www.azdah.in',
           telephone: '+91-85880-56122',
           email: 'hello@azdahfit.in',
+          // Tells Google the Instagram account is this business, so the profile
+          // can surface alongside the listing.
+          sameAs: [INSTAGRAM],
           hasMap: MAPS_LINK,
           address: {
             '@type': 'PostalAddress',
@@ -901,12 +927,17 @@ export default function HomePage() {
               {[
                 { label: 'Studio', text: 'AZDAH, AU Small Finance Bank (3rd floor)\n10/3, Jeevan Bima Nagar Main Rd\nLIC Colony, Sector 11, New Thippasandra\nBengaluru, Karnataka 560075' },
                 { label: 'Hours', text: 'Monday: Closed\nTuesday – Sunday: By appointment only' },
-                { label: 'WhatsApp', text: '+91 85880 56122' },
-                { label: 'Email', text: 'hello@azdahfit.in' },
-              ].map(({ label, text }) => (
+                { label: 'Instagram', text: INSTAGRAM_HANDLE, href: INSTAGRAM },
+                { label: 'WhatsApp', text: '+91 85880 56122', href: 'https://wa.me/918588056122' },
+              ].map(({ label, text, href }) => (
                 <div key={label}>
                   <div style={{ color: ORANGE, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 8 }}>{label}</div>
-                  <div style={{ color: CREAM, fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-line' }}>{text}</div>
+                  {href ? (
+                    <a href={href} target="_blank" rel="noopener noreferrer"
+                      style={{ color: CREAM, fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-line', textDecoration: 'none', borderBottom: `1px solid ${ORANGE}44`, paddingBottom: 1 }}>{text}</a>
+                  ) : (
+                    <div style={{ color: CREAM, fontSize: 15, lineHeight: 1.65, whiteSpace: 'pre-line' }}>{text}</div>
+                  )}
                 </div>
               ))}
             </div>
@@ -965,6 +996,15 @@ export default function HomePage() {
                 <div style={{ color: FAINT, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 16 }}>Members</div>
                 <Link href="/login" style={{ display: 'block', color: MUTED, fontSize: 13.5, marginBottom: 10 }}>Login</Link>
                 <button onClick={() => scrollTo('membership')} style={{ display: 'block', background: 'none', border: 'none', color: MUTED, fontSize: 13.5, marginBottom: 10, padding: 0 }}>Join now</button>
+              </div>
+              <div>
+                <div style={{ color: FAINT, fontSize: 10, letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 700, marginBottom: 16 }}>Follow</div>
+                <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, color: MUTED, fontSize: 13.5, marginBottom: 10 }}>
+                  <IgIcon size={15} />{INSTAGRAM_HANDLE}
+                </a>
+                <a href="https://wa.me/918588056122" target="_blank" rel="noopener noreferrer"
+                  style={{ display: 'block', color: MUTED, fontSize: 13.5, marginBottom: 10 }}>WhatsApp</a>
               </div>
             </div>
           </div>
