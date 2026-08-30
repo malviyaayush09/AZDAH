@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 
   const { data: plan } = await db
     .from('membership_plans')
-    .select('id, name, duration_days, price_paise')
+    .select('id, name, duration_days, price_paise, classes_included, allowed_categories')
     .eq('id', intent.plan_id)
     .single();
 
@@ -118,18 +118,30 @@ export async function POST(req: NextRequest) {
   endDate.setDate(endDate.getDate() + plan.duration_days);
   const toDate = (d: Date) => d.toISOString().split('T')[0];
 
-  const rawPassword = generatePassword(8);
-  const passwordHash = await hashPassword(rawPassword);
+  const memberPhone = intent.phone || phone;
 
-  const { error } = await db.from('members').upsert(
-    {
-      phone: intent.phone || phone,
+  // Same shape as verify-payment: a repeat buyer keeps their account. The old
+  // upsert replaced password_hash here too, and on this branch the new password
+  // is generated server-side and shown to nobody — so a second purchase could
+  // lock a member out with no way to learn their new credentials.
+  const { data: existing } = await db
+    .from('members')
+    .select('id')
+    .eq('phone', memberPhone)
+    .maybeSingle();
+
+  const isNewMember = !existing;
+  let memberId: string;
+  let rawPassword: string | null = null;
+
+  if (isNewMember) {
+    rawPassword = generatePassword(8);
+    const passwordHash = await hashPassword(rawPassword);
+    const { data: created, error } = await db.from('members').insert({
+      phone: memberPhone,
       name: intent.name,
       email: intent.email || null,
       password_hash: passwordHash,
-      plan_id: intent.plan_id,
-      plan_start: toDate(startDate),
-      plan_end: toDate(endDate),
       is_active: true,
       razorpay_payment_id: paymentId,
       razorpay_order_id: orderId,
@@ -137,21 +149,74 @@ export async function POST(req: NextRequest) {
       reschedule_reset_date: toDate(startDate).slice(0, 7) + '-01',
       must_change_password: true,
       expiry_reminder_sent: false,
-    },
-    { onConflict: 'phone' }
-  );
+    }).select('id').single();
 
-  if (error) {
-    console.error('Webhook: member upsert failed', error);
+    if (error || !created) {
+      console.error('Webhook: member insert failed', error);
+      await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
+      return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    }
+    memberId = created.id;
+  } else {
+    memberId = existing.id;
+    const { error } = await db.from('members').update({
+      name: intent.name,
+      email: intent.email || null,
+      is_active: true,
+      expiry_reminder_sent: false,
+      razorpay_payment_id: paymentId,
+      razorpay_order_id: orderId,
+    }).eq('id', memberId);
+    if (error) {
+      console.error('Webhook: member update failed', error);
+      await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
+      return NextResponse.json({ error: 'Failed' }, { status: 500 });
+    }
+  }
+
+  const { error: packErr } = await db.from('member_packs').insert({
+    member_id: memberId,
+    plan_id: plan.id,
+    plan_name: plan.name,
+    classes_included: plan.classes_included ?? null,
+    allowed_categories: plan.allowed_categories ?? null,
+    starts_on: toDate(startDate),
+    expires_on: toDate(endDate),
+    razorpay_order_id: orderId,
+    razorpay_payment_id: paymentId,
+    amount_paid_paise: (intent.amount_paise as number | null) ?? null,
+  });
+  if (packErr) {
+    console.error('Webhook: member_pack insert failed', packErr);
     await db.from('payment_intents').update({ status: 'pending' }).eq('order_id', orderId);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
 
-  // Send WhatsApp
-  Promise.all([
-    sendMemberWelcome(intent.phone || phone, intent.name, plan.name, rawPassword),
-    sendAdminNewMember(intent.name, intent.phone || phone, plan.name, plan.price_paise),
-  ]).catch((err) => console.error('Webhook WhatsApp error:', err));
+  // plan_* names the pack expiring LAST, never simply the newest purchase.
+  const { data: primary } = await db
+    .from('member_packs')
+    .select('plan_id, starts_on, expires_on')
+    .eq('member_id', memberId)
+    .order('expires_on', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (primary) {
+    await db.from('members').update({
+      plan_id: primary.plan_id,
+      plan_start: primary.starts_on,
+      plan_end: primary.expires_on,
+    }).eq('id', memberId);
+  }
+
+  // Send WhatsApp. Credentials go only to a genuinely new member — an existing
+  // one keeps the password they already have, so there is nothing to send.
+  const notify: Promise<unknown>[] = [
+    sendAdminNewMember(intent.name, memberPhone, plan.name, plan.price_paise),
+  ];
+  if (isNewMember && rawPassword) {
+    notify.push(sendMemberWelcome(memberPhone, intent.name, plan.name, rawPassword));
+  }
+  Promise.all(notify).catch((err) => console.error('Webhook WhatsApp error:', err));
 
   return NextResponse.json({ received: true });
 }

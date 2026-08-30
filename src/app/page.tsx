@@ -191,6 +191,7 @@ export default function HomePage() {
   const [checkoutError, setCheckoutError] = useState('');
   const [checkoutDone, setCheckoutDone] = useState(false);
   const [memberCreds, setMemberCreds] = useState<{ phone: string; name: string; password: string } | null>(null);
+  const [returningMember, setReturningMember] = useState(false);
   const [receipt, setReceipt] = useState<{ planName: string; amount: number; planEnd: string } | null>(null);
 
   useEffect(() => {
@@ -250,6 +251,7 @@ export default function HomePage() {
     setSelectedPlan(plan);
     setCheckoutError('');
     setCheckoutDone(false);
+    setReturningMember(false);
     setForm({ name: '', phone: '', email: '', promoCode: '' });
   };
 
@@ -347,7 +349,14 @@ export default function HomePage() {
           });
           const result = await verifyRes.json();
           if (result.success) {
-            setMemberCreds({ phone: result.phone, name: result.name, password: result.password });
+            // A returning member keeps the login they already have — there is
+            // no new password to show them.
+            if (result.password) {
+              setMemberCreds({ phone: result.phone, name: result.name, password: result.password });
+            } else {
+              setMemberCreds(null);
+            }
+            setReturningMember(result.is_new_member === false);
             setReceipt({ planName: selectedPlan.name, amount: order.amount, planEnd: result.plan_end || '' });
             setCheckoutDone(true);
           } else {
@@ -1018,6 +1027,16 @@ export default function HomePage() {
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* A returning member already has a login — reassure, don't confuse */}
+                {returningMember && (
+                  <div style={{ background: DARK, border: '1px solid rgba(74,222,128,0.3)', borderRadius: 6, padding: '16px 18px', marginBottom: 22, textAlign: 'left' }}>
+                    <div style={{ color: '#4ade80', fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', marginBottom: 8 }}>Pack added</div>
+                    <p style={{ color: MUTED, fontSize: 13, margin: 0, lineHeight: 1.6 }}>
+                      This pack has been added to your existing account. Log in with the password you already use — it has not changed.
+                    </p>
                   </div>
                 )}
 

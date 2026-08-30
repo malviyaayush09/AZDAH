@@ -50,19 +50,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Name should not contain numbers.' }, { status: 400 });
   }
 
-  // Duplicate active member check
-  const { data: existingMember } = await db
-    .from('members')
-    .select('id, plan_end, is_active')
-    .eq('phone', phone)
-    .maybeSingle();
-
-  if (existingMember) {
-    const planEnd = new Date(existingMember.plan_end);
-    if (planEnd > new Date() && existingMember.is_active) {
-      return NextResponse.json({ error: 'already_member' }, { status: 409 });
-    }
-  }
+  // An existing member buying another pack is allowed and expected: somebody
+  // with a Mobility pack may want Pole classes too. This used to return 409
+  // 'already_member' because a member could hold only one pack and a second
+  // purchase would have overwritten the first, destroying credits they had
+  // paid for. Packs are now separate rows (member_packs), so buying again adds
+  // a pack instead of replacing one.
 
   // Fetch plan
   const { data: plan } = await db

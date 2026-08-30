@@ -2,7 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
-import { countUsedClasses } from '@/lib/pack';
+import { pickPackForClass } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
 import { sendWaitlistPromoted } from '@/lib/whatsapp';
 import { isPastNoticeWindow, NOTICE_HOURS } from '@/lib/date';
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   // Block cancel if class has already started
   const { data: cls } = await db
     .from('classes')
-    .select('class_date, start_time')
+    .select('class_date, start_time, category')
     .eq('id', booking.class_id)
     .single();
   if (cls && isPastNoticeWindow(cls.class_date, cls.start_time)) {
@@ -64,19 +64,11 @@ export async function POST(req: NextRequest) {
     const raw = entry.members;
     const m = (Array.isArray(raw) ? raw[0] : raw) as WaitMember | null;
     if (!m || !m.is_active || m.is_frozen) continue;
-    if (m.plan_end && new Date(m.plan_end) < new Date()) continue;
-
-    if (m.plan_id) {
-      const { data: planData } = await db
-        .from('membership_plans')
-        .select('classes_included')
-        .eq('id', m.plan_id)
-        .single();
-      if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
-        const usedCount = await countUsedClasses(db, entry.member_id, m.plan_start);
-        if (usedCount >= planData.classes_included) continue; // pack exhausted
-      }
-    }
+    // Promote only into a class this member could have booked themselves:
+    // some pack of theirs must cover the category and still hold a credit.
+    // Judged per pack — members.plan_end only names the primary one.
+    const { pack: payer } = await pickPackForClass(db, entry.member_id, cls?.category ?? null);
+    if (!payer) continue;
 
     next = { id: entry.id, member_id: entry.member_id, members: m };
     break;

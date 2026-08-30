@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
   // 5. Fetch plan by the INTENT's plan_id (never the client's).
   const { data: plan } = await db
     .from('membership_plans')
-    .select('id, name, duration_days, price_paise')
+    .select('id, name, duration_days, price_paise, classes_included, allowed_categories')
     .eq('id', intent.plan_id)
     .single();
   if (!plan) {
@@ -113,22 +113,32 @@ export async function POST(req: NextRequest) {
   endDate.setDate(endDate.getDate() + plan.duration_days);
   const toDate = (d: Date) => d.toISOString().split('T')[0];
 
-  // 7. Generate password and hash it
-  const rawPassword = generatePassword(8);
-  const passwordHash = await hashPassword(rawPassword);
-
-  // 8. Upsert member (handles duplicate phone — renews membership)
-  const { data: member, error: memberError } = await db
+  // 7. New member, or an existing one buying another pack?
+  //
+  // This used to be a single upsert on phone, which meant a second purchase
+  // silently replaced the member's password_hash, cleared must_change_password
+  // and reset their reschedule counter — logging them out of an account they
+  // already had. An existing buyer must keep everything except the new pack.
+  const { data: existing } = await db
     .from('members')
-    .upsert(
-      {
+    .select('id')
+    .eq('phone', phone)
+    .maybeSingle();
+
+  const isNewMember = !existing;
+  let memberId: string;
+  let rawPassword: string | null = null;
+
+  if (isNewMember) {
+    rawPassword = generatePassword(8);
+    const passwordHash = await hashPassword(rawPassword);
+    const { data: created, error: createErr } = await db
+      .from('members')
+      .insert({
         phone,
         name,
         email,
         password_hash: passwordHash,
-        plan_id: plan.id,
-        plan_start: toDate(startDate),
-        plan_end: toDate(endDate),
         is_active: true,
         razorpay_payment_id: paymentId,
         razorpay_order_id: orderId,
@@ -136,23 +146,92 @@ export async function POST(req: NextRequest) {
         reschedule_reset_date: toDate(startDate).slice(0, 7) + '-01',
         must_change_password: true,
         expiry_reminder_sent: false,
-      },
-      { onConflict: 'phone' }
-    )
-    .select('id')
-    .single();
+      })
+      .select('id')
+      .single();
 
-  if (memberError || !member) {
-    logError(memberError, { path: '/api/verify-payment', context: 'member_upsert' });
-    await revertIntent(); // allow the webhook / a retry to re-process this payment
+    if (createErr || !created) {
+      logError(createErr, { path: '/api/verify-payment', context: 'member_insert' });
+      await revertIntent(); // allow the webhook / a retry to re-process this payment
+      return NextResponse.json({ error: 'Failed to activate membership' }, { status: 500 });
+    }
+    memberId = created.id;
+  } else {
+    memberId = existing.id;
+    // Deliberately NOT touched: password_hash, must_change_password,
+    // reschedule_used_this_month, reschedule_reset_date. Buying a pack is not
+    // a reason to log somebody out or hand back their monthly reschedule.
+    const { error: updErr } = await db
+      .from('members')
+      .update({
+        name,
+        email,
+        is_active: true,
+        expiry_reminder_sent: false,
+        razorpay_payment_id: paymentId,
+        razorpay_order_id: orderId,
+      })
+      .eq('id', memberId);
+    if (updErr) {
+      logError(updErr, { path: '/api/verify-payment', context: 'member_update' });
+      await revertIntent();
+      return NextResponse.json({ error: 'Failed to activate membership' }, { status: 500 });
+    }
+  }
+
+  // 8. Record the pack itself. plan_name / classes_included / allowed_categories
+  //    are snapshots: editing the plan later must not change what somebody
+  //    already bought.
+  const { error: packErr } = await db.from('member_packs').insert({
+    member_id: memberId,
+    plan_id: plan.id,
+    plan_name: plan.name,
+    classes_included: plan.classes_included ?? null,
+    allowed_categories: plan.allowed_categories ?? null,
+    starts_on: toDate(startDate),
+    expires_on: toDate(endDate),
+    razorpay_order_id: orderId,
+    razorpay_payment_id: paymentId,
+    amount_paid_paise: (intent.amount_paise as number | null) ?? null,
+  });
+  if (packErr) {
+    logError(packErr, { path: '/api/verify-payment', context: 'member_pack_insert' });
+    await revertIntent();
     return NextResponse.json({ error: 'Failed to activate membership' }, { status: 500 });
   }
 
-  // 9. Send WhatsApp messages (fire & forget — don't block the response)
-  Promise.all([
-    sendMemberWelcome(phone, name, plan.name, rawPassword),
-    sendAdminNewMember(name, phone, plan.name, plan.price_paise),
-  ]).catch((err) => console.error('WhatsApp send error:', err));
+  // 9. Point members.plan_* at the PRIMARY pack — the one expiring last — not
+  //    blindly at whatever was just bought. Otherwise buying a short pack drags
+  //    plan_end backwards and locks the member out of a longer one they hold.
+  const { data: primary } = await db
+    .from('member_packs')
+    .select('plan_id, starts_on, expires_on')
+    .eq('member_id', memberId)
+    .order('expires_on', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  return NextResponse.json({ success: true, phone, name, password: rawPassword, plan_end: toDate(endDate) });
+  if (primary) {
+    await db.from('members').update({
+      plan_id: primary.plan_id,
+      plan_start: primary.starts_on,
+      plan_end: primary.expires_on,
+    }).eq('id', memberId);
+  }
+
+  // 10. WhatsApp (fire & forget). Only a genuinely new member gets credentials;
+  //     sending a password to somebody who already has one is both wrong and
+  //     alarming.
+  const notify: Promise<unknown>[] = [sendAdminNewMember(name, phone, plan.name, plan.price_paise)];
+  if (isNewMember && rawPassword) notify.push(sendMemberWelcome(phone, name, plan.name, rawPassword));
+  Promise.all(notify).catch((err) => console.error('WhatsApp send error:', err));
+
+  return NextResponse.json({
+    success: true,
+    phone,
+    name,
+    password: rawPassword,          // null when they already had an account
+    is_new_member: isNewMember,
+    plan_end: toDate(endDate),
+  });
 }

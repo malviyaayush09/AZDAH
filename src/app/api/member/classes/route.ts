@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
 import { todayIST, classHasStarted } from '@/lib/date';
+import { allowedCategoriesUnion } from '@/lib/pack';
 
 export async function GET(req: NextRequest) {
   const sessionToken = req.cookies.get('session')?.value;
@@ -17,15 +18,10 @@ export async function GET(req: NextRequest) {
   // "Today" must be the studio's calendar day, not the server's UTC one.
   const today = todayIST();
 
-  // Which class categories does this member's pack grant access to?
-  const { data: member } = await db
-    .from('members')
-    .select('membership_plans(allowed_categories)')
-    .eq('id', memberId)
-    .single();
-  const plansRaw = member?.membership_plans;
-  const planInfo = (Array.isArray(plansRaw) ? plansRaw[0] : plansRaw) as { allowed_categories: string[] | null } | null;
-  const allowed = planInfo?.allowed_categories ?? null;
+  // Which categories may this member book? The union across every pack they
+  // hold — someone with a Mobility pack and a Pole pack must see both. null
+  // means unrestricted; an empty array means they hold no spendable pack.
+  const allowed = await allowedCategoriesUnion(db, memberId);
 
   // Upcoming classes — restricted to the categories the member paid for.
   let classQuery = db

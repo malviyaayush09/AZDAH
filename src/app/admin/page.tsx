@@ -5,12 +5,21 @@ import { useRouter } from 'next/navigation';
 import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 
+type MemberPack = {
+  id: string; name: string;
+  classes_included: number | null; used: number; remaining: number | null;
+  starts_on: string; expires_on: string; is_frozen: boolean; is_live: boolean;
+};
+
 type Member = {
   id: string; name: string; phone: string;
   plan_name: string; plan_start: string; plan_end: string;
   days_remaining: number; is_active: boolean;
   reschedule_used: boolean; razorpay_payment_id: string | null;
   created_at: string;
+  packs?: MemberPack[];
+  live_pack_count?: number;
+  classes_remaining?: number | null;
 };
 
 type ClassSlot = {
@@ -371,7 +380,12 @@ export default function AdminPage() {
   function exportMembersCSV() {
     const headers = ['Name','Phone','Plan','Joined','Expires','Days Left','Status','Payment ID'];
     const rows = members.map(m => [
-      m.name, m.phone, m.plan_name,
+      m.name, m.phone,
+      (m.packs && m.packs.filter(p => p.is_live).length
+        ? m.packs.filter(p => p.is_live)
+            .map(p => `${p.name} (${p.remaining === null ? 'unlimited' : p.remaining + ' left'})`)
+            .join(' + ')
+        : m.plan_name),
       fmtDate(m.created_at), fmtDate(m.plan_end),
       String(m.days_remaining),
       m.is_active ? 'Active' : 'Inactive',
@@ -1134,7 +1148,21 @@ export default function AdminPage() {
                         <div style={{ color:MUTED, fontSize:11 }}>{m.phone.replace('91','+91 ')}</div>
                       </div>
                     </div>
-                    <div style={{ fontSize:12, color:ORANGE, fontWeight:500 }}>{m.plan_name}</div>
+                    <div>
+                      {/* A member may hold several packs. Show each with what is
+                          left on it — plan_name alone only names the primary. */}
+                      {(m.packs && m.packs.filter(p => p.is_live).length)
+                        ? m.packs.filter(p => p.is_live).map(p => (
+                            <div key={p.id} style={{ fontSize:12, color:ORANGE, fontWeight:500, lineHeight:1.45 }}>
+                              {p.name}
+                              <span style={{ color: p.remaining === 0 ? '#f87171' : MUTED, fontWeight:400 }}>
+                                {' · '}{p.remaining === null ? 'unlimited' : `${p.remaining}/${p.classes_included} left`}
+                              </span>
+                              {p.is_frozen && <span style={{ color:'#fbbf24', fontWeight:400 }}>{' · frozen'}</span>}
+                            </div>
+                          ))
+                        : <div style={{ fontSize:12, color:ORANGE, fontWeight:500 }}>{m.plan_name}</div>}
+                    </div>
                     <div style={{ fontSize:12, color:MUTED }}>{fmtDate(m.created_at)}</div>
                     <div>
                       <div style={{ fontSize:12, color: m.days_remaining<=7 ? '#f87171' : CREAM }}>{fmtDate(m.plan_end)}</div>

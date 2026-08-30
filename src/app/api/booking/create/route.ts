@@ -2,7 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
-import { countUsedClasses } from '@/lib/pack';
+import { pickPackForClass, countUsedInPack } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
 import { sendBookingConfirmed } from '@/lib/whatsapp';
 import { checkRateLimit, recordRequest } from '@/lib/rate-limit';
@@ -53,41 +53,29 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'This class has already started.' }, { status: 400 });
   }
 
-  // Check membership not expired
-  if (member.plan_end && new Date(member.plan_end) < new Date()) {
-    return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
-  }
+  // Which pack pays for this class? A member may hold several at once, so the
+  // answer is the one expiring soonest that covers this category and still has
+  // a credit. Expiry is judged per pack, not from members.plan_end, because
+  // that column only names the primary pack.
+  const { pack, reason } = await pickPackForClass(db, memberId, cls.category ?? null);
 
-  // Check class pack not exhausted + class tier is covered by the member's pack
-  let packLimit: number | null = null;
-  if (member.plan_id) {
-    const { data: planData } = await db
-      .from('membership_plans')
-      .select('classes_included, allowed_categories')
-      .eq('id', member.plan_id)
-      .single();
-
-    // Tier gate: the class's category must be one the member's pack allows.
-    if (planData?.allowed_categories && planData.allowed_categories.length && cls.category
-        && !planData.allowed_categories.includes(cls.category)) {
+  if (!pack) {
+    if (reason === 'not_covered') {
       return NextResponse.json(
         { error: 'This class is not included in your pack. Please check the classes your pack covers.' },
         { status: 403 }
       );
     }
-
-    if (planData?.classes_included !== null && planData?.classes_included !== undefined) {
-      packLimit = planData.classes_included;
-      const usedCount = await countUsedClasses(db, memberId, member.plan_start);
-      if (usedCount >= planData.classes_included) {
-        const n = planData.classes_included;
-        return NextResponse.json(
-          { error: `All ${n} class${n !== 1 ? 'es' : ''} in your pack have been used. Please purchase a new pack to continue.` },
-          { status: 400 }
-        );
-      }
+    if (reason === 'exhausted') {
+      return NextResponse.json(
+        { error: 'You have used every class in your packs. Please purchase another pack to continue.' },
+        { status: 400 }
+      );
     }
+    return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
   }
+
+  const packLimit: number | null = pack.classes_included;
 
   // Atomic capacity check + insert — prevents race conditions
   const { data: result, error: bookingError } = await db.rpc('book_class_atomic', {
@@ -100,12 +88,22 @@ export async function POST(req: NextRequest) {
   if (result === 'class_full') return NextResponse.json({ error: 'Class is full' }, { status: 400 });
   if (result === 'already_booked') return NextResponse.json({ error: 'Already booked for this class' }, { status: 400 });
 
+  // book_class_atomic does not know about packs, so charge the booking to the
+  // chosen pack immediately. Until this lands the row counts against nothing,
+  // which is why the re-check below reads the pack rather than the member.
+  await db.from('bookings')
+    .update({ pack_id: pack.id })
+    .eq('member_id', memberId)
+    .eq('class_id', classId)
+    .eq('status', 'confirmed')
+    .is('pack_id', null);
+
   // The pack check above is check-then-insert: two simultaneous requests can
   // both pass it and overshoot the pack. Re-count now that the row exists and
   // undo this booking if it turned out to be one too many. (The capacity race
   // is already handled inside book_class_atomic; the pack limit is not.)
   if (packLimit !== null) {
-    const usedNow = await countUsedClasses(db, memberId, member.plan_start);
+    const usedNow = await countUsedInPack(db, pack.id);
     if (usedNow > packLimit) {
       // Delete rather than mark cancelled. A cancelled booking now consumes a
       // pack credit, and this booking lost a race — the member never had it.
@@ -115,7 +113,7 @@ export async function POST(req: NextRequest) {
         .eq('class_id', classId)
         .eq('status', 'confirmed');
       return NextResponse.json(
-        { error: `All ${packLimit} class${packLimit !== 1 ? 'es' : ''} in your pack have been used. Please purchase a new pack to continue.` },
+        { error: `All ${packLimit} class${packLimit !== 1 ? 'es' : ''} in that pack have been used. Please purchase another pack to continue.` },
         { status: 400 }
       );
     }

@@ -11,6 +11,11 @@ type MemberInfo = {
   plan_name: string; plan_start: string; plan_end: string;
   days_remaining: number; reschedule_used: boolean;
   classes_included: number | null; classes_remaining: number | null;
+  packs?: {
+    id: string; name: string;
+    classes_included: number | null; used: number; remaining: number | null;
+    starts_on: string; expires_on: string; is_frozen: boolean;
+  }[];
   must_change_password?: boolean; is_frozen?: boolean;
 };
 type ClassSlot = {
@@ -94,6 +99,10 @@ export default function DashboardPage() {
   const [waitlistPos, setWaitlistPos] = useState<WaitlistPos[]>([]);
 
   const todayStr = toYMD(new Date());
+  const daysUntil = (d: string) =>
+    Math.ceil((new Date(d + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / 86400000);
+  // Packs worth showing: still running today. Expired ones would only add noise.
+  const livePacks = (member?.packs || []).filter((p) => p.expires_on >= todayStr);
   // Cover the whole published schedule, not a fixed fortnight. A hard 14-day
   // strip silently hid every class beyond it once a longer cycle went up.
   const lastClassDate = classes.reduce((m,c)=>c.class_date>m?c.class_date:m, todayStr);
@@ -319,7 +328,7 @@ export default function DashboardPage() {
             <div style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap',background:CARD,border:`1px solid ${BORDER}`,borderRadius:999,padding:'9px 16px'}}>
               <span style={{width:7,height:7,borderRadius:'50%',background:member!.days_remaining<=7?'#f87171':'#4ade80',flexShrink:0}} />
               <span style={{color:CREAM,fontSize:13,fontWeight:600}}>{member!.days_remaining} days left</span>
-              <span style={{color:MUTED,fontSize:12}}>· {member!.plan_name}</span>
+              <span style={{color:MUTED,fontSize:12}}>· {livePacks.length > 1 ? `${livePacks.length} packs` : member!.plan_name}</span>
               <span style={{color:MUTED,fontSize:12}}>· Reschedule {member!.reschedule_used?'used':'available'}</span>
               {member!.days_remaining<=7&&<a href="/#plans" style={{fontSize:11,color:ORANGE,border:'1px solid rgba(248,52,51,.35)',padding:'4px 11px',borderRadius:999,textDecoration:'none',background:'rgba(248,52,51,.06)',marginLeft:2}}>Renew →</a>}
             </div>
@@ -330,6 +339,36 @@ export default function DashboardPage() {
             </div>
             <span style={{fontSize:11,color:MUTED}}>{fmtShortDate(member!.plan_start)} → <span style={{color:member!.days_remaining<=7?'#f87171':MUTED}}>{fmtShortDate(member!.plan_end)}</span></span>
           </div>
+
+          {/* One card per pack. A member holding a Mobility pack and a Pole pack
+              must see which classes belong to which, not one merged number. */}
+          {livePacks.length>0&&(
+            <div style={{marginTop:18,display:'flex',gap:10,flexWrap:'wrap'}}>
+              {livePacks.map(p=>{
+                const out=p.remaining!==null&&p.remaining<=0;
+                const soon=daysUntil(p.expires_on);
+                return(
+                  <div key={p.id} style={{flex:'1 1 210px',minWidth:200,background:CARD,border:`1px solid ${out?'rgba(248,113,113,.35)':BORDER}`,borderRadius:12,padding:'14px 16px'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10,marginBottom:8}}>
+                      <span style={{color:CREAM,fontSize:13,fontWeight:600,lineHeight:1.3}}>{p.name}</span>
+                      {p.is_frozen&&<span style={{fontSize:10,color:'#fbbf24',flexShrink:0}}>Frozen</span>}
+                    </div>
+                    <div style={{display:'flex',alignItems:'baseline',gap:6}}>
+                      <span style={{fontFamily:SERIF,fontSize:26,fontWeight:800,color:out?'#f87171':CREAM,lineHeight:1}}>
+                        {p.remaining===null?'∞':p.remaining}
+                      </span>
+                      <span style={{fontSize:12,color:MUTED}}>
+                        {p.remaining===null?'classes':`of ${p.classes_included} left`}
+                      </span>
+                    </div>
+                    <div style={{marginTop:9,fontSize:11,color:soon<=7?'#f87171':MUTED}}>
+                      {out?'All used — ':''}Expires {fmtShortDate(p.expires_on)}{soon>=0&&soon<=7?` · ${soon} day${soon===1?'':'s'}`:''}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── NEXT CLASS ── */}
@@ -716,8 +755,20 @@ export default function DashboardPage() {
                 <div style={{marginTop:24,padding:'14px 16px',background:'rgba(255,255,255,.03)',border:`1px solid ${BORDER}`,borderRadius:10}}>
                   <div style={{fontSize:11,color:MUTED,letterSpacing:'.08em',textTransform:'uppercase',marginBottom:10}}>Membership</div>
                   <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Plan</span><span style={{color:CREAM,fontWeight:600}}>{member!.plan_name}</span></div>
-                    <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Valid until</span><span style={{color:member!.days_remaining<=7?'#f87171':CREAM,fontWeight:600}}>{fmtShortDate(member!.plan_end)}</span></div>
+                    {(member!.packs&&member!.packs.length?member!.packs:[]).map(p=>(
+                      <div key={p.id} style={{display:'flex',justifyContent:'space-between',fontSize:13,gap:12}}>
+                        <span style={{color:MUTED}}>{p.name}</span>
+                        <span style={{color:CREAM,fontWeight:600,textAlign:'right'}}>
+                          {p.remaining===null?'unlimited':`${p.remaining} left`} · till {fmtShortDate(p.expires_on)}
+                        </span>
+                      </div>
+                    ))}
+                    {(!member!.packs||!member!.packs.length)&&(
+                      <>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Plan</span><span style={{color:CREAM,fontWeight:600}}>{member!.plan_name}</span></div>
+                        <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Valid until</span><span style={{color:member!.days_remaining<=7?'#f87171':CREAM,fontWeight:600}}>{fmtShortDate(member!.plan_end)}</span></div>
+                      </>
+                    )}
                     <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Days remaining</span><span style={{color:member!.days_remaining<=7?'#f87171':'#4ade80',fontWeight:600}}>{member!.days_remaining} days</span></div>
                     <div style={{display:'flex',justifyContent:'space-between',fontSize:13}}><span style={{color:MUTED}}>Status</span><span style={{color:member!.is_frozen?'#fbbf24':'#4ade80',fontWeight:600}}>{member!.is_frozen?'Frozen':'Active'}</span></div>
                   </div>

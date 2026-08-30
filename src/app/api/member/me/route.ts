@@ -2,7 +2,7 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
-import { countUsedClasses } from '@/lib/pack';
+import { getAllPacksWithUsage, totalRemaining } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
@@ -53,12 +53,11 @@ export async function GET(req: NextRequest) {
   const planName = planInfo?.name || 'Unknown Plan';
   const classesIncluded = planInfo?.classes_included ?? null;
 
-  // Count used classes in current pack (confirmed + attended since plan_start)
-  let classesRemaining: number | null = null;
-  if (classesIncluded !== null && member.plan_start) {
-    const usedCount = await countUsedClasses(db, memberId, member.plan_start);
-    classesRemaining = Math.max(0, classesIncluded - usedCount);
-  }
+  // Classes left across EVERY pack, not just the primary one. A member holding
+  // a Mobility pack and a Pole pack must see the sum, or the credits they paid
+  // for look like they have vanished.
+  const packs = await getAllPacksWithUsage(db, memberId);
+  const classesRemaining = await totalRemaining(db, memberId);
 
   return NextResponse.json({
     member: {
@@ -68,6 +67,16 @@ export async function GET(req: NextRequest) {
       plan_name: planName,
       plan_start: member.plan_start,
       plan_end: member.plan_end,
+      packs: packs.map((p) => ({
+        id: p.id,
+        name: p.plan_name,
+        classes_included: p.classes_included,
+        used: p.used,
+        remaining: p.remaining,
+        starts_on: p.starts_on,
+        expires_on: p.expires_on,
+        is_frozen: p.is_frozen,
+      })),
       days_remaining: daysRemaining,
       classes_included: classesIncluded,
       classes_remaining: classesRemaining,
