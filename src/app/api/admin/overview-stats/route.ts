@@ -20,24 +20,28 @@ export async function GET(req: NextRequest) {
   const ago30Days = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
 
   const [todayClassesRes, expiringRes, inactiveRes, todayAttendanceRes] = await Promise.all([
-    // Today's classes with booking counts
+    // classes has no booked_count column — asking for one made PostgREST
+    // reject the whole query, so the overview reported nought classes today
+    // while the calendar beside it listed them. Counted from bookings below.
     db.from('classes')
-      .select('id, title, start_time, end_time, capacity, booked_count')
+      .select('id, title, start_time, end_time, capacity')
       .eq('class_date', today)
       .eq('is_cancelled', false)
       .order('start_time'),
 
-    // Members expiring in next 7 days
+    // plan_name and days_remaining are computed, not stored. Selecting them
+    // failed the query outright and the panel showed nothing was expiring.
     db.from('members')
-      .select('id, name, phone, plan_name, plan_end, days_remaining')
+      .select('id, name, phone, plan_end, membership_plans(name)')
       .eq('is_active', true)
       .gte('plan_end', today)
       .lte('plan_end', in7Days)
       .order('plan_end'),
 
-    // Inactive members (is_active = false)
+    // Same again: no plan_name column, so "no inactive members" was shown
+    // while two sat deactivated.
     db.from('members')
-      .select('id, name, phone, plan_name, plan_end, created_at')
+      .select('id, name, phone, plan_end, created_at, membership_plans(name)')
       .eq('is_active', false)
       .order('created_at', { ascending: false })
       .limit(50),
@@ -50,8 +54,25 @@ export async function GET(req: NextRequest) {
   ]);
 
   const todayClasses = todayClassesRes.data || [];
-  const totalExpected = todayClasses.reduce((s, c) => s + (c.booked_count || 0), 0);
-  const attended = (todayAttendanceRes.data || []).filter((b) => b.attended === true).length;
+  const todayBookings = todayAttendanceRes.data || [];
+  // Expected heads today is simply how many confirmed bookings sit against
+  // today's classes.
+  const totalExpected = todayBookings.length;
+  const attended = todayBookings.filter((b) => b.attended === true).length;
+
+  // membership_plans comes back as an object or a one-item array depending on
+  // the relationship, the same shape the members route already handles.
+  type WithPlan = { membership_plans?: { name: string } | { name: string }[] | null };
+  const planNameOf = (m: WithPlan) =>
+    (Array.isArray(m.membership_plans) ? m.membership_plans[0] : m.membership_plans)?.name || 'Unknown';
+  const shape = (m: WithPlan & { plan_end?: string | null }) => ({
+    ...m,
+    plan_name: planNameOf(m),
+    days_remaining: m.plan_end
+      ? Math.max(0, Math.ceil((new Date(m.plan_end).getTime() - new Date(today).getTime()) / 86400000))
+      : 0,
+    membership_plans: undefined,
+  });
 
   return NextResponse.json({
     today: {
@@ -59,8 +80,8 @@ export async function GET(req: NextRequest) {
       expected_members: totalExpected,
       attended,
     },
-    expiring_this_week: expiringRes.data || [],
-    inactive_members: inactiveRes.data || [],
+    expiring_this_week: (expiringRes.data || []).map(shape),
+    inactive_members: (inactiveRes.data || []).map(shape),
     // Surfaced so the admin UI can say plainly that members are NOT being
     // messaged automatically — otherwise it looks like they were notified.
     whatsapp_enabled: process.env.WHATSAPP_ENABLED === 'true',

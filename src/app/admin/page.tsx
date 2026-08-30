@@ -758,8 +758,14 @@ export default function AdminPage() {
 
   const weekDates = getWeekDates(weekStart);
   const todayStr = toYMD(new Date());
-  const trainerNames = Array.from(new Set(classes.map(c => c.trainer_name).filter(Boolean) as string[]));
-  const trainerColor = (name: string | null) => name ? PALETTE[trainerNames.indexOf(name) % PALETTE.length] : MUTED;
+  // Trimmed: the data holds both 'AZDAH' and 'AZDAH ', which listed the same
+  // person twice in the legend and gave her two different colours on the grid.
+  const trainerNames = Array.from(new Set(
+    classes.map(c => (c.trainer_name || '').trim()).filter(Boolean)));
+  const trainerColor = (name: string | null) => {
+    const n = (name || '').trim();
+    return n ? PALETTE[trainerNames.indexOf(n) % PALETTE.length] : MUTED;
+  };
   // Bookings for the week on screen. Refetched whenever the week moves.
   useEffect(() => {
     const days = getWeekDates(weekStart);
@@ -890,10 +896,17 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
         @media(max-width:900px){.admin-cal{grid-template-columns:1fr !important}}
         .cbk .dup{opacity:0;transition:opacity .15s}
         .cbk:hover .dup,.cbk:focus-within .dup{opacity:1}
-        .lrow{display:grid;grid-template-columns:82px minmax(140px,1.1fr) 110px 58px minmax(170px,2fr);
-          gap:12px;align-items:center;padding:9px 12px;cursor:pointer;border-radius:7px}
+        .lrow,.lhead{display:grid;
+          grid-template-columns:74px minmax(140px,1fr) 104px 52px minmax(200px,1.9fr);
+          gap:10px;align-items:center}
+        .lrow{padding:9px 12px;cursor:pointer;border-radius:7px}
         .lrow:hover{background:rgba(255,255,255,.03)}
-        @media(max-width:900px){.lrow{grid-template-columns:1fr;gap:3px;padding:11px 12px}}
+        .lhead{padding:9px 12px 9px 15px;font-size:9.5px;letter-spacing:.12em;
+          text-transform:uppercase;font-weight:600}
+        @media(max-width:900px){
+          .lrow{grid-template-columns:1fr;gap:3px;padding:11px 12px}
+          .lhead{display:none}
+        }
       `}} />
 
       {/* ── Navbar ── */}
@@ -1155,7 +1168,14 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
               {/* List: one row per class, with room across the page for the
                   names the 125px grid columns cannot hold. */}
               {calView === 'list' && (
-                <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'6px 6px 10px' }}>
+                <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'0 6px 10px' }}>
+                  <div className="lhead" style={{ color:MUTED, borderBottom:`1px solid ${BORDER}` }}>
+                    <span>Time</span>
+                    <span>Class</span>
+                    <span>Instructor</span>
+                    <span style={{ textAlign:'right' }}>Booked</span>
+                    <span>Members</span>
+                  </div>
                   {weekDates.map(date => {
                     const ds = toYMD(date);
                     const list = classes
@@ -1185,7 +1205,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                               <span style={{ fontSize:11.5, color:tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                                 {cls.trainer_name?.trim() || '—'}
                               </span>
-                              <span style={{ fontSize:11.5, fontWeight:600, color: full ? '#f87171' : MUTED }}>
+                              <span style={{ fontSize:11.5, fontWeight:600, textAlign:'right', color: full ? '#f87171' : MUTED }}>
                                 {cls.booked_count}/{cls.capacity}
                               </span>
                               <span style={{ display:'flex', flexWrap:'wrap', gap:'4px 6px' }}>

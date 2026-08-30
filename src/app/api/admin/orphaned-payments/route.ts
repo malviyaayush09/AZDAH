@@ -64,11 +64,25 @@ export async function GET(req: NextRequest) {
   if (candidates.length === 0) return NextResponse.json({ orphans: [], checked: 0 });
 
   // Which of these orders actually produced a member?
+  const orderIds = candidates.map((c) => c.order_id);
   const { data: members } = await db
     .from('members')
     .select('razorpay_order_id')
-    .in('razorpay_order_id', candidates.map((c) => c.order_id));
+    .in('razorpay_order_id', orderIds);
   const provisioned = new Set((members || []).map((m) => m.razorpay_order_id));
+
+  // members.razorpay_order_id only ever holds the most recent purchase, so on
+  // its own it reports every repeat customer as unprovisioned: buy a second
+  // pack and the first order suddenly matches no member. member_packs records
+  // the order that created each pack and is the real answer to "did this
+  // payment deliver anything".
+  const { data: packs } = await db
+    .from('member_packs')
+    .select('razorpay_order_id')
+    .in('razorpay_order_id', orderIds);
+  for (const p of packs || []) {
+    if (p.razorpay_order_id) provisioned.add(p.razorpay_order_id);
+  }
 
   const unprovisioned = candidates.filter((c) => !provisioned.has(c.order_id));
 
