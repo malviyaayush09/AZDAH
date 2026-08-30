@@ -188,7 +188,7 @@ export default function LoginPage() {
           <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <p style={{ fontSize: 13, color: '#8A7A6A' }}>
               Not a member?{' '}
-              <a href="/#plans" style={{ color: '#F83433', textDecoration: 'none', fontWeight: 500 }}>View Plans →</a>
+              <a href="/#membership" style={{ color: '#F83433', textDecoration: 'none', fontWeight: 500 }}>View Plans →</a>
             </p>
             <p style={{ fontSize: 12, color: '#8A7A6A', textAlign: 'center' }}>
               Forgot password?{' '}

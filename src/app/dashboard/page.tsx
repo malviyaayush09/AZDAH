@@ -372,7 +372,9 @@ export default function DashboardPage() {
               <span style={{color:CREAM,fontSize:13,fontWeight:600}}>{member!.days_remaining} days left</span>
               <span style={{color:MUTED,fontSize:12}}>· {livePacks.length > 1 ? `${livePacks.length} packs` : member!.plan_name}</span>
               <span style={{color:MUTED,fontSize:12}}>· Reschedule {member!.reschedule_used?'used':'available'}</span>
-              {member!.days_remaining<=7&&<a href="/#plans" style={{fontSize:11,color:ORANGE,border:'1px solid rgba(248,52,51,.35)',padding:'4px 11px',borderRadius:999,textDecoration:'none',background:'rgba(248,52,51,.06)',marginLeft:2}}>Renew →</a>}
+              <a href="/#membership" style={{fontSize:11,fontWeight:600,color:ORANGE,border:'1px solid rgba(248,52,51,.35)',padding:'4px 11px',borderRadius:999,textDecoration:'none',background:'rgba(248,52,51,.06)',marginLeft:2,whiteSpace:'nowrap'}}>
+                {member!.days_remaining<=7 ? 'Renew →' : 'Buy another pack →'}
+              </a>
             </div>
           </div>
           <div style={{marginTop:16,display:'flex',alignItems:'center',gap:14,flexWrap:'wrap'}}>
@@ -381,6 +383,17 @@ export default function DashboardPage() {
             </div>
             <span style={{fontSize:11,color:MUTED}}>{fmtShortDate(member!.plan_start)} → <span style={{color:member!.days_remaining<=7?'#f87171':MUTED}}>{fmtShortDate(member!.plan_end)}</span></span>
           </div>
+
+          {/* A member with nothing left should not have to hunt for how to buy
+              more -- this is exactly the moment the studio was losing them. */}
+          {livePacks.length>0 && livePacks.every(p=>p.remaining!==null&&p.remaining<=0) && (
+            <div style={{marginTop:16,padding:'13px 16px',background:'rgba(248,52,51,.07)',border:'1px solid rgba(248,52,51,.28)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'space-between',gap:14,flexWrap:'wrap'}}>
+              <span style={{fontSize:13,color:CREAM}}>You have used every class on your packs.</span>
+              <a href="/#membership" style={{fontSize:12,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',background:ORANGE,color:'#fff',padding:'9px 16px',borderRadius:6,textDecoration:'none',whiteSpace:'nowrap'}}>
+                Buy another pack
+              </a>
+            </div>
+          )}
 
           {/* One card per pack. A member holding a Mobility pack and a Pole pack
               must see which classes belong to which, not one merged number. */}
