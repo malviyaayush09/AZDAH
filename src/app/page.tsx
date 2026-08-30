@@ -399,6 +399,9 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
+            <Link href="/schedule" className="nav-link" style={{ color: MUTED, fontSize: 13.5, letterSpacing: '0.025em', fontWeight: 500 }}>
+              Schedule
+            </Link>
             <Link href="/workshops" className="nav-link" style={{ color: MUTED, fontSize: 13.5, letterSpacing: '0.025em', fontWeight: 500 }}>
               Workshops
             </Link>
@@ -430,6 +433,9 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
+            <Link href="/schedule" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
+              Schedule
+            </Link>
             <Link href="/workshops" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
               Workshops
             </Link>
