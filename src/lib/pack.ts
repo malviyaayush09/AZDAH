@@ -9,15 +9,31 @@ export type MemberPack = {
   plan_name: string;
   classes_included: number | null;
   allowed_categories: string[] | null;
+  /**
+   * Credits per category, for combo packs: {"pole_regular":4,"mobility":8}.
+   *
+   * A combo sells categories at different prices -- pole is 2,360 a class and
+   * self practice 1,200 -- so one shared pool lets someone spend the whole pack
+   * on the dearest category and take far more value than they paid for. Where
+   * this is set it is authoritative: a category absent from it is not covered
+   * at all, and each named category has its own separate allowance.
+   *
+   * null on every ordinary single-category pack, which behave exactly as before.
+   */
+  category_limits: Record<string, number> | null;
   starts_on: string;
   expires_on: string;
   is_frozen: boolean;
 };
 
+export type CategoryUsage = { category: string; limit: number; used: number; remaining: number };
+
 export type PackWithUsage = MemberPack & {
   used: number;
   /** null when the pack has no class limit (duration-based). */
   remaining: number | null;
+  /** Per-category breakdown; empty for packs with one shared pool. */
+  by_category: CategoryUsage[];
 };
 
 /**
@@ -41,6 +57,43 @@ export async function countUsedInPack(db: ServiceClient, packId: string): Promis
     .eq('classes.is_cancelled', false);
 
   return count || 0;
+}
+
+/**
+ * The same count as countUsedInPack, broken down by class category.
+ *
+ * Same rules: a cancelled booking still counts, a studio-cancelled class does
+ * not, and a 'rescheduled' row is ignored in favour of its replacement.
+ */
+export async function countUsedByCategory(
+  db: ServiceClient,
+  packId: string,
+): Promise<Record<string, number>> {
+  const { data } = await db
+    .from('bookings')
+    .select('id, classes!inner(category, is_cancelled)')
+    .eq('pack_id', packId)
+    .in('status', ['confirmed', 'cancelled'])
+    .eq('classes.is_cancelled', false);
+
+  const out: Record<string, number> = {};
+  for (const row of data || []) {
+    const cls = (row as { classes?: { category?: string | null } | { category?: string | null }[] }).classes;
+    const cat = (Array.isArray(cls) ? cls[0] : cls)?.category;
+    if (cat) out[cat] = (out[cat] || 0) + 1;
+  }
+  return out;
+}
+
+/** Credits left in one category of a combo pack. */
+export function remainingInCategory(
+  pack: MemberPack,
+  category: string,
+  usedByCat: Record<string, number>,
+): number {
+  const limit = pack.category_limits?.[category];
+  if (limit == null) return 0;
+  return Math.max(0, limit - (usedByCat[category] || 0));
 }
 
 /**
@@ -122,7 +175,7 @@ export async function getSpendablePacks(db: ServiceClient, memberId: string): Pr
   const today = todayIST();
   const { data } = await db
     .from('member_packs')
-    .select('id, plan_id, plan_name, classes_included, allowed_categories, starts_on, expires_on, is_frozen')
+    .select('id, plan_id, plan_name, classes_included, allowed_categories, category_limits, starts_on, expires_on, is_frozen')
     .eq('member_id', memberId)
     .eq('is_frozen', false)
     .lte('starts_on', today)
@@ -137,23 +190,46 @@ export async function getAllPacksWithUsage(db: ServiceClient, memberId: string):
   await ensurePackForLegacyMember(db, memberId);
   const { data } = await db
     .from('member_packs')
-    .select('id, plan_id, plan_name, classes_included, allowed_categories, starts_on, expires_on, is_frozen')
+    .select('id, plan_id, plan_name, classes_included, allowed_categories, category_limits, starts_on, expires_on, is_frozen')
     .eq('member_id', memberId)
     .order('expires_on', { ascending: true });
 
   const packs = (data || []) as MemberPack[];
   return Promise.all(packs.map(async (p) => {
     const used = await countUsedInPack(db, p.id);
-    return {
-      ...p,
-      used,
-      remaining: p.classes_included == null ? null : Math.max(0, p.classes_included - used),
-    };
+    let by_category: CategoryUsage[] = [];
+    let remaining = p.classes_included == null ? null : Math.max(0, p.classes_included - used);
+
+    if (p.category_limits) {
+      const byCat = await countUsedByCategory(db, p.id);
+      by_category = Object.entries(p.category_limits).map(([category, limit]) => ({
+        category,
+        limit,
+        used: byCat[category] || 0,
+        remaining: Math.max(0, limit - (byCat[category] || 0)),
+      }));
+      // The headline number is the sum of the parts, so it can never claim
+      // credits that no category will actually accept.
+      remaining = by_category.reduce((n, c) => n + c.remaining, 0);
+    }
+
+    return { ...p, used, remaining, by_category };
   }));
 }
 
-/** A pack covers a class when it names no categories, or names this one. */
+/**
+ * A pack covers a class when it names no categories, or names this one.
+ *
+ * Where category_limits is set it wins outright: only the categories it names
+ * are covered, whatever allowed_categories happens to say. The two combos
+ * still list 'strength' from before that discipline was dropped, and the
+ * limits are the deliberate, current answer.
+ */
 export function packCoversCategory(pack: MemberPack, category: string | null): boolean {
+  if (pack.category_limits) {
+    if (!category) return false;
+    return Object.prototype.hasOwnProperty.call(pack.category_limits, category);
+  }
   if (!pack.allowed_categories || pack.allowed_categories.length === 0) return true;
   if (!category) return true;
   return pack.allowed_categories.includes(category);
@@ -181,6 +257,15 @@ export async function pickPackForClass(
   if (covering.length === 0) return { pack: null, reason: 'not_covered' };
 
   for (const p of covering) {
+    // A combo is spent per category: having pole credits left says nothing
+    // about whether this mobility class is paid for.
+    if (p.category_limits) {
+      const byCat = await countUsedByCategory(db, p.id);
+      if (category && remainingInCategory(p, category, byCat) > 0) {
+        return { pack: p, reason: 'ok' };
+      }
+      continue;
+    }
     // No class limit means duration-based: spendable for as long as it runs.
     if (p.classes_included == null) return { pack: p, reason: 'ok' };
     const used = await countUsedInPack(db, p.id);
@@ -194,8 +279,9 @@ export async function allowedCategoriesUnion(db: ServiceClient, memberId: string
   const packs = await getSpendablePacks(db, memberId);
   if (packs.length === 0) return [];
   // A pack with no category restriction opens everything.
-  if (packs.some((p) => !p.allowed_categories || p.allowed_categories.length === 0)) return null;
-  return Array.from(new Set(packs.flatMap((p) => p.allowed_categories as string[])));
+  if (packs.some((p) => !p.category_limits && (!p.allowed_categories || p.allowed_categories.length === 0))) return null;
+  return Array.from(new Set(packs.flatMap((p) =>
+    p.category_limits ? Object.keys(p.category_limits) : (p.allowed_categories as string[]))));
 }
 
 /**
@@ -206,6 +292,13 @@ export async function totalRemaining(db: ServiceClient, memberId: string): Promi
   const packs = await getSpendablePacks(db, memberId);
   let total = 0;
   for (const p of packs) {
+    if (p.category_limits) {
+      const byCat = await countUsedByCategory(db, p.id);
+      for (const cat of Object.keys(p.category_limits)) {
+        total += remainingInCategory(p, cat, byCat);
+      }
+      continue;
+    }
     if (p.classes_included == null) return null;
     total += Math.max(0, p.classes_included - (await countUsedInPack(db, p.id)));
   }

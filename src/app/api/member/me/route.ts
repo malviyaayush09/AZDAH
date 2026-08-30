@@ -73,6 +73,9 @@ export async function GET(req: NextRequest) {
         classes_included: p.classes_included,
         used: p.used,
         remaining: p.remaining,
+        // Combo packs only. A member who bought 4 pole and 8 mobility must be
+        // told which is which, or "12 left" reads as 12 of anything.
+        by_category: p.by_category,
         starts_on: p.starts_on,
         expires_on: p.expires_on,
         is_frozen: p.is_frozen,

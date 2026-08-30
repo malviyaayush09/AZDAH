@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 
   const { data: plan } = await db
     .from('membership_plans')
-    .select('id, name, duration_days, price_paise, classes_included, allowed_categories')
+    .select('id, name, duration_days, price_paise, classes_included, allowed_categories, category_limits')
     .eq('id', intent.plan_id)
     .single();
 
@@ -180,6 +180,9 @@ export async function POST(req: NextRequest) {
     plan_name: plan.name,
     classes_included: plan.classes_included ?? null,
     allowed_categories: plan.allowed_categories ?? null,
+    // Snapshotted like everything else here: a combo bought today keeps the
+    // split it was sold with, even if the studio reprices the plan later.
+    category_limits: plan.category_limits ?? null,
     starts_on: toDate(startDate),
     expires_on: toDate(endDate),
     razorpay_order_id: orderId,

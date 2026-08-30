@@ -8,6 +8,7 @@ import { Toast } from '@/components/Toast';
 type MemberPack = {
   id: string; name: string;
   classes_included: number | null; used: number; remaining: number | null;
+  by_category?: { category: string; limit: number; used: number; remaining: number }[];
   starts_on: string; expires_on: string; is_frozen: boolean; is_live: boolean;
 };
 
@@ -797,6 +798,10 @@ export default function AdminPage() {
     if (p >= 1) return '#f87171';
     if (p >= 0.6) return '#4ade80';
     return '#fbbf24';
+  };
+  const CATEGORY_LABEL: Record<string, string> = {
+    pole_regular: 'Pole', pole_nimisha: 'Pole (Nimisha)', mobility: 'Mobility',
+    self_practice: 'Self practice', strength: 'Strength',
   };
   const FILL_KEY: [string, string][] = [
     ['rgba(241,233,218,0.20)', 'Nobody yet'],
@@ -1793,6 +1798,17 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                               <span style={{ color: p.remaining === 0 ? '#f87171' : MUTED, fontWeight:400 }}>
                                 {' · '}{p.remaining === null ? 'unlimited' : `${p.remaining}/${p.classes_included} left`}
                               </span>
+                              {/* Combos are spent per discipline, so the pooled
+                                  number alone hides which half has run out. */}
+                              {p.by_category && p.by_category.length > 0 && (
+                                <div style={{ fontSize:11, color:MUTED, fontWeight:400, marginTop:1 }}>
+                                  {p.by_category.map(c => (
+                                    <span key={c.category} style={{ marginRight:8, color: c.remaining === 0 ? '#f87171' : MUTED }}>
+                                      {CATEGORY_LABEL[c.category] || c.category.replace(/_/g,' ')} {c.remaining}/{c.limit}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
                               {p.is_frozen && <span style={{ color:'#fbbf24', fontWeight:400 }}>{' · frozen'}</span>}
                             </div>
                           ))

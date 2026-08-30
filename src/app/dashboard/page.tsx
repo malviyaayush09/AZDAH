@@ -14,6 +14,7 @@ type MemberInfo = {
   packs?: {
     id: string; name: string;
     classes_included: number | null; used: number; remaining: number | null;
+    by_category?: { category: string; limit: number; used: number; remaining: number }[];
     starts_on: string; expires_on: string; is_frozen: boolean;
   }[];
   must_change_password?: boolean; is_frozen?: boolean;
@@ -106,6 +107,14 @@ export default function DashboardPage() {
     Math.ceil((new Date(d + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / 86400000);
   // Packs worth showing: still running today. Expired ones would only add noise.
   const livePacks = (member?.packs || []).filter((p) => p.expires_on >= todayStr);
+  const CATEGORY_LABEL: Record<string, string> = {
+    pole_regular: 'Pole',
+    pole_nimisha: 'Pole (Nimisha)',
+    mobility: 'Mobility',
+    self_practice: 'Self practice',
+    strength: 'Strength',
+  };
+  const catName = (c: string) => CATEGORY_LABEL[c] || c.replace(/_/g, ' ');
   // Cover the whole published schedule, not a fixed fortnight. A hard 14-day
   // strip silently hid every class beyond it once a longer cycle went up.
   const lastClassDate = classes.reduce((m,c)=>c.class_date>m?c.class_date:m, todayStr);
@@ -416,6 +425,27 @@ export default function DashboardPage() {
                         {p.remaining===null?'classes':`of ${p.classes_included} left`}
                       </span>
                     </div>
+
+                    {/* A combo is spent per discipline, so one number would be
+                        misleading: 8 left does not mean 8 of whichever you like. */}
+                    {p.by_category&&p.by_category.length>0&&(
+                      <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:5}}>
+                        {p.by_category.map(c=>{
+                          const gone=c.remaining<=0;
+                          return(
+                            <div key={c.category} style={{display:'flex',alignItems:'center',gap:8}}>
+                              <span style={{fontSize:11.5,color:gone?'#f87171':CREAM,minWidth:86}}>{catName(c.category)}</span>
+                              <div style={{flex:1,height:4,background:'rgba(255,255,255,.06)',borderRadius:999,overflow:'hidden'}}>
+                                <div style={{height:'100%',width:`${(c.used/Math.max(1,c.limit))*100}%`,background:gone?'#f87171':ORANGE,borderRadius:999}} />
+                              </div>
+                              <span style={{fontSize:11,color:gone?'#f87171':MUTED,minWidth:34,textAlign:'right'}}>
+                                {c.remaining}/{c.limit}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     <div style={{marginTop:9,fontSize:11,color:soon<=7?'#f87171':MUTED}}>
                       {out?'All used — ':''}Expires {fmtShortDate(p.expires_on)}{soon>=0&&soon<=7?` · ${soon} day${soon===1?'':'s'}`:''}
                     </div>
