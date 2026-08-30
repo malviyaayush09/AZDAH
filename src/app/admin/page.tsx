@@ -171,7 +171,10 @@ export default function AdminPage() {
   const [calTrainer, setCalTrainer] = useState('all');
   const [calMember, setCalMember] = useState('all');
   const [calPlan, setCalPlan] = useState('all');
-  const [showNames, setShowNames] = useState(true);
+  // Week is for scanning what is on; List is for reading who is in it. Seven
+  // columns leave about 125px per class, which is too narrow for names.
+  const [calView, setCalView] = useState<'week' | 'list'>('week');
+  const [showNames, setShowNames] = useState(false);
   // Members tab: which row is expanded, and the dates behind it.
   const [openMember, setOpenMember] = useState<string | null>(null);
   const [memberDates, setMemberDates] = useState<Record<string, AdminBooking[]>>({});
@@ -885,6 +888,12 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:#3A2B1E;border-radius:9px}
         @media(max-width:900px){.admin-cal{grid-template-columns:1fr !important}}
+        .cbk .dup{opacity:0;transition:opacity .15s}
+        .cbk:hover .dup,.cbk:focus-within .dup{opacity:1}
+        .lrow{display:grid;grid-template-columns:82px minmax(140px,1.1fr) 110px 58px minmax(170px,2fr);
+          gap:12px;align-items:center;padding:9px 12px;cursor:pointer;border-radius:7px}
+        .lrow:hover{background:rgba(255,255,255,.03)}
+        @media(max-width:900px){.lrow{grid-template-columns:1fr;gap:3px;padding:11px 12px}}
       `}} />
 
       {/* ── Navbar ── */}
@@ -1084,9 +1093,21 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                     </button>
                   ))}
                 </div>
-                <span style={{ fontSize:13, color:MUTED }}>
-                  {weekDates[0].toLocaleDateString('en-IN',{day:'numeric',month:'short'})} – {weekDates[6].toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
-                </span>
+                <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap' }}>
+                  <div style={{ display:'flex', border:`1px solid ${BORDER}`, borderRadius:6, overflow:'hidden' }}>
+                    {([['week','Week'],['list','List']] as const).map(([k,l]) => (
+                      <button key={k} onClick={() => { setCalView(k); if (k === 'list') setShowNames(true); }}
+                        title={k === 'week' ? 'Grid of the week' : 'Every class with who is booked'}
+                        style={{ padding:'6px 14px', fontSize:12, fontWeight:500, border:'none', cursor:'pointer',
+                          background: calView===k ? ORANGE : 'transparent', color: calView===k ? '#fff' : MUTED }}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                  <span style={{ fontSize:13, color:MUTED }}>
+                    {weekDates[0].toLocaleDateString('en-IN',{day:'numeric',month:'short'})} – {weekDates[6].toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
+                  </span>
+                </div>
               </div>
 
               {/* Filters. The studio had to open every class to find out who
@@ -1104,10 +1125,13 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                   <option value="all">All plans</option>
                   {planOptions.map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
-                <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MUTED, cursor:'pointer' }}>
-                  <input type="checkbox" checked={showNames} onChange={e => setShowNames(e.target.checked)} />
-                  Show who&apos;s booked
-                </label>
+                {/* List always shows names -- that is what it is for. */}
+                {calView === 'week' && (
+                  <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:MUTED, cursor:'pointer' }}>
+                    <input type="checkbox" checked={showNames} onChange={e => setShowNames(e.target.checked)} />
+                    Show who&apos;s booked
+                  </label>
+                )}
                 {calFiltered && (
                   <button onClick={() => { setCalTrainer('all'); setCalMember('all'); setCalPlan('all'); }}
                     style={{ background:'none', border:'none', color:ORANGE, fontSize:12, textDecoration:'underline', cursor:'pointer' }}>
@@ -1128,8 +1152,66 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 </div>
               )}
 
+              {/* List: one row per class, with room across the page for the
+                  names the 125px grid columns cannot hold. */}
+              {calView === 'list' && (
+                <div style={{ background:CARD, border:`1px solid ${BORDER}`, borderRadius:10, padding:'6px 6px 10px' }}>
+                  {weekDates.map(date => {
+                    const ds = toYMD(date);
+                    const list = classes
+                      .filter(c => c.class_date === ds && !c.is_cancelled && calMatch(c))
+                      .sort((a,b) => a.start_time.localeCompare(b.start_time));
+                    if (!list.length) return null;   // empty days are noise here
+                    return (
+                      <section key={ds}>
+                        <div style={{ display:'flex', alignItems:'baseline', gap:9, padding:'12px 12px 7px' }}>
+                          <span style={{ fontSize:13, fontWeight:700, color: ds===todayStr ? ORANGE : CREAM }}>
+                            {date.toLocaleDateString('en-IN',{weekday:'long'})}
+                          </span>
+                          <span style={{ fontSize:12, color:MUTED }}>
+                            {date.toLocaleDateString('en-IN',{day:'numeric',month:'short'})}
+                          </span>
+                          {ds===todayStr && <span style={{ fontSize:10, color:ORANGE, letterSpacing:'.1em', textTransform:'uppercase' }}>Today</span>}
+                        </div>
+                        {list.map(cls => {
+                          const tc = trainerColor(cls.trainer_name);
+                          const bs = bookingsByClass.get(cls.id) || [];
+                          const full = cls.booked_count >= cls.capacity;
+                          return (
+                            <div key={cls.id} className="lrow" onClick={() => openClassModal(cls)}
+                              style={{ borderLeft:`3px solid ${tc}` }}>
+                              <span style={{ fontSize:12, color:ORANGE, fontWeight:600 }}>{fmtTime(cls.start_time)}</span>
+                              <span style={{ fontSize:12.5, color:CREAM, fontWeight:500 }}>{cls.title}</span>
+                              <span style={{ fontSize:11.5, color:tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                {cls.trainer_name?.trim() || '—'}
+                              </span>
+                              <span style={{ fontSize:11.5, fontWeight:600, color: full ? '#f87171' : MUTED }}>
+                                {cls.booked_count}/{cls.capacity}
+                              </span>
+                              <span style={{ display:'flex', flexWrap:'wrap', gap:'4px 6px' }}>
+                                {bs.length === 0
+                                  ? <span style={{ fontSize:11.5, color:MUTED, opacity:.6 }}>Nobody booked</span>
+                                  : bs.map(b => (
+                                      <span key={b.id} title={b.plan_name || 'no pack'}
+                                        style={{ fontSize:11, padding:'2px 8px', borderRadius:999,
+                                          border:`1px solid ${b.member_id===calMember ? ORANGE : BORDER}`,
+                                          color: b.member_id===calMember ? ORANGE : CREAM,
+                                          background: b.member_id===calMember ? `${ORANGE}16` : 'transparent' }}>
+                                        {b.member_name}
+                                      </span>
+                                    ))}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* 7-column grid */}
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
+              <div style={{ display: calView === 'week' ? 'grid' : 'none', gridTemplateColumns:'repeat(7,1fr)', gap:8 }}>
                 {weekDates.map((date, i) => {
                   const ds = toYMD(date);
                   const isToday = ds === todayStr;
@@ -1158,12 +1240,20 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                             <div key={cls.id} className="cbk" onClick={() => openClassModal(cls)}
                               style={{ background:`${tc}12`, border:`1px solid ${tc}30`, borderLeft:`3px solid ${tc}`, borderRadius:7, padding:'9px 8px' }}>
                               <div style={{ fontSize:11, fontWeight:600, color:CREAM, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.title}</div>
-                              <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{fmtTime(cls.start_time)}</div>
-                              {cls.trainer_name && <div style={{ fontSize:10, color:tc, marginTop:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{cls.trainer_name}</div>}
-                              <div style={{ marginTop:5, height:3, background:'rgba(255,255,255,.06)', borderRadius:999, overflow:'hidden' }}>
-                                <div style={{ height:'100%', width:`${pct}%`, background:tc, borderRadius:999, transition:'width .3s' }} />
+                              {/* Time and instructor share a line, and the fill
+                                  bar carries the count beside it. Five stacked
+                                  rows in a 125px column read as noise. */}
+                              <div style={{ fontSize:10, color:MUTED, marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                                {fmtTime(cls.start_time)}{cls.trainer_name ? <span style={{ color:tc }}> · {cls.trainer_name.trim()}</span> : null}
                               </div>
-                              <div style={{ fontSize:10, color:MUTED, marginTop:2 }}>{cls.booked_count}/{cls.capacity} booked</div>
+                              <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:6 }}>
+                                <div style={{ flex:1, height:3, background:'rgba(255,255,255,.06)', borderRadius:999, overflow:'hidden' }}>
+                                  <div style={{ height:'100%', width:`${pct}%`, background:tc, borderRadius:999, transition:'width .3s' }} />
+                                </div>
+                                <span style={{ fontSize:9.5, color: cls.booked_count >= cls.capacity ? '#f87171' : MUTED, fontWeight:600, flexShrink:0 }}>
+                                  {cls.booked_count}/{cls.capacity}
+                                </span>
+                              </div>
                               {showNames && (() => {
                                 const bs = bookingsByClass.get(cls.id) || [];
                                 if (!bs.length) return null;
@@ -1187,9 +1277,10 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                                 );
                               })()}
                               <button
+                                className={dupBusy === cls.id ? undefined : 'dup'}
                                 onClick={e => { e.stopPropagation(); duplicateClass(cls); }}
                                 disabled={dupBusy === cls.id}
-                                style={{ marginTop:6, width:'100%', padding:'4px 0', fontSize:10, background:'rgba(248,52,51,.1)', border:'1px solid rgba(248,52,51,.25)', color:ORANGE, borderRadius:4, cursor:'pointer', opacity: dupBusy===cls.id?.5:1 }}>
+                                style={{ marginTop:6, width:'100%', padding:'4px 0', fontSize:10, background:'rgba(248,52,51,.1)', border:'1px solid rgba(248,52,51,.25)', color:ORANGE, borderRadius:4, cursor:'pointer' }}>
                                 {dupBusy===cls.id?'…':'+ Duplicate'}
                               </button>
                             </div>
