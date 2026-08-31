@@ -244,6 +244,12 @@ export default function AdminPage() {
     inactive_members: { id: string; name: string; phone: string; plan_name: string; plan_end: string; created_at: string }[];
     whatsapp_enabled?: boolean;
   };
+  type ScheduleHealth = {
+    ends_on: string | null; days_left: number;
+    classes_next_14_days: number; seats_free_next_14_days: number;
+    credits_expiring_next_14_days: number;
+    stranded_members: number; stranded_credits: number;
+  };
   const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
   // Per-day toggle for revealing cancelled classes in the calendar.
   const [expandedCancelled, setExpandedCancelled] = useState<Record<string, boolean>>({});
@@ -1133,6 +1139,56 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
             </div>
           </div>
         )}
+
+        {/* The schedule running out is the one problem the studio cannot see
+            by looking at a calendar: it needs credits and expiry dates beside
+            the class list. Fifteen members nearly lost 38 paid classes to it
+            before anyone noticed. Shown on every screen, not just Dashboard. */}
+        {(() => {
+          const sch = (overviewStats as unknown as { schedule?: ScheduleHealth } | null)?.schedule;
+          if (!sch || !sch.ends_on) return null;
+          const short = sch.days_left <= 21;
+          // Seats, not classes: a class seats several people.
+          const oversubscribed = sch.credits_expiring_next_14_days > sch.seats_free_next_14_days;
+          if (!short && !oversubscribed && !sch.stranded_credits) return null;
+          const urgent = sch.days_left <= 10 || sch.stranded_credits > 0;
+          const tint = urgent ? '248,113,113' : '251,191,36';
+          const ink = urgent ? '#f87171' : '#fbbf24';
+          return (
+            <div style={{ marginBottom:16, padding:'13px 16px', background:`rgba(${tint},.08)`, border:`1px solid rgba(${tint},.32)`, borderRadius:10 }}>
+              <div style={{ fontSize:13.5, fontWeight:700, color:ink, marginBottom:5 }}>
+                Your schedule ends {fmtDate(sch.ends_on)}{sch.days_left >= 0 ? ` — ${sch.days_left} day${sch.days_left===1?'':'s'} away` : ''}
+              </div>
+              <div style={{ fontSize:12.5, color:MUTED, lineHeight:1.55, marginBottom:11 }}>
+                {sch.stranded_credits > 0 && (
+                  <>
+                    <strong style={{ color:ink, fontWeight:600 }}>
+                      {sch.stranded_members} member{sch.stranded_members===1?'':'s'} hold {sch.stranded_credits} paid class{sch.stranded_credits===1?'':'es'} that expire after your last published class
+                    </strong>
+                    {' '}— they cannot book them at all until you add more.{' '}
+                  </>
+                )}
+                {oversubscribed && (
+                  <>
+                    In the next 14 days there are only <strong style={{ color:CREAM, fontWeight:600 }}>{sch.seats_free_next_14_days} free places</strong> across
+                    {' '}{sch.classes_next_14_days} classes, but <strong style={{ color:CREAM, fontWeight:600 }}>{sch.credits_expiring_next_14_days} paid classes</strong> expiring.{' '}
+                  </>
+                )}
+                Nothing adds classes automatically — every class is created here.
+              </div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                <button onClick={() => goTab('add-class')}
+                  style={{ fontSize:12, fontWeight:700, letterSpacing:'.05em', textTransform:'uppercase', background:ORANGE, color:'#fff', border:'none', padding:'8px 14px', borderRadius:6, cursor:'pointer' }}>
+                  Add classes
+                </button>
+                <button onClick={() => goTab('templates')}
+                  style={{ fontSize:12, color:CREAM, background:'none', border:`1px solid ${BORDER}`, padding:'8px 14px', borderRadius:6, cursor:'pointer' }}>
+                  Generate from templates
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ════ DASHBOARD ════ */}
         {tab === 'overview' && (<>
