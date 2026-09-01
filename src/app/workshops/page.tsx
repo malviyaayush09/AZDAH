@@ -51,6 +51,16 @@ const CSS = `
   body{margin:0;overflow-x:hidden;background:${DARK}}
   button{font-family:inherit;cursor:pointer}
   input{font-family:inherit}
+
+        /* iOS Safari zooms the whole page whenever a focused input has a font
+           size below 16px. Inside a position:fixed modal that shifts the
+           viewport, slides the field under the keyboard and leaves the dialog
+           part-way off screen -- which is what "I cannot even type, the page is
+           stuck" looks like from the member's side. Desktop keeps its own
+           sizing; this only applies where the phone does. */
+        @media (max-width: 900px) {
+          input, select, textarea { font-size: 16px !important }
+        }
   .ws-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px}
   .ws-card{transition:transform .25s ease,border-color .25s ease}
   .ws-card:hover{transform:translateY(-4px);border-color:rgba(248,52,51,0.5)}

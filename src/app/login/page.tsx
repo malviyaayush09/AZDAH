@@ -44,6 +44,16 @@ export default function LoginPage() {
         .card-enter { animation: fadeIn .5s ease forwards; }
         .feat-item { display:flex; align-items:center; gap:10px; animation: fadeIn .5s ease forwards; }
         input { outline: none; background: transparent; width: 100%; color: #F5F0E8; font-size: 14px; font-family: inherit; border: none; }
+
+        /* iOS Safari zooms the whole page whenever a focused input has a font
+           size below 16px. Inside a position:fixed modal that shifts the
+           viewport, slides the field under the keyboard and leaves the dialog
+           part-way off screen -- which is what "I cannot even type, the page is
+           stuck" looks like from the member's side. Desktop keeps its own
+           sizing; this only applies where the phone does. */
+        @media (max-width: 900px) {
+          input, select, textarea { font-size: 16px !important }
+        }
         input::placeholder { color: #3A2B1E; }
         input:-webkit-autofill { -webkit-box-shadow: 0 0 0 30px #1A1410 inset !important; -webkit-text-fill-color: #F5F0E8 !important; }
         .eye-btn { background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; }

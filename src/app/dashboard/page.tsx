@@ -350,12 +350,26 @@ export default function DashboardPage() {
         .tab-btn{background:none;transition:color .15s}
         @media(max-width:800px){.dash-top,.dash-stats{grid-template-columns:1fr !important}}
         .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)}
+        /* Blurring a full-screen layer every frame is costly on modest
+           phones and can leave the dialog visibly stuck. The dimming
+           alone does the job there. */
+        @media (max-width: 900px){ .modal-bg{backdrop-filter:none;background:rgba(0,0,0,.86)} }
         .modal-card{background:#1A1410;border:1px solid #3A2B1E;border-radius:14px;width:100%;max-width:420px;animation:modalIn .25s ease forwards;
           /* The card scrolls inside itself. Centred in a fixed parent with no
              scroll, a modal taller than the screen is clipped at both ends and
              its button cannot be reached at all. */
           max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto}
         input{outline:none;background:transparent;width:100%;color:${CREAM};font-size:13px;font-family:inherit;border:none}
+
+        /* iOS Safari zooms the whole page whenever a focused input has a font
+           size below 16px. Inside a position:fixed modal that shifts the
+           viewport, slides the field under the keyboard and leaves the dialog
+           part-way off screen -- which is what "I cannot even type, the page is
+           stuck" looks like from the member's side. Desktop keeps its own
+           sizing; this only applies where the phone does. */
+        @media (max-width: 900px) {
+          input, select, textarea { font-size: 16px !important }
+        }
         input::placeholder{color:#3A2B1E}
         input:-webkit-autofill{-webkit-box-shadow:0 0 0 30px #1A1410 inset !important;-webkit-text-fill-color:${CREAM} !important}
         ::-webkit-scrollbar{height:3px;width:3px}

@@ -1026,6 +1026,10 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
         .abtn{transition:opacity .12s,background .12s;cursor:pointer}
         .abtn:hover{opacity:.8}
         .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)}
+        /* Blurring a full-screen layer every frame is costly on modest
+           phones and can leave the dialog visibly stuck. The dimming
+           alone does the job there. */
+        @media (max-width: 900px){ .modal-bg{backdrop-filter:none;background:rgba(0,0,0,.86)} }
         .modal-box{background:#1A1410;border:1px solid #3A2B1E;border-radius:14px;width:100%;max-width:520px;max-height:88vh;overflow-y:auto}
         input:focus{outline:none;border-color:${ORANGE} !important}
         input[type=date]::-webkit-calendar-picker-indicator,input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.5);cursor:pointer}
