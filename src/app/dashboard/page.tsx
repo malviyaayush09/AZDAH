@@ -247,8 +247,15 @@ export default function DashboardPage() {
 
   async function changePassword(e: React.FormEvent) {
     e.preventDefault(); setPwMsg(null);
-    if (pwForm.newPw !== pwForm.confirm) { setPwMsg({text:'Passwords do not match',ok:false}); return; }
+    // These four checks mirror /api/member/change-password exactly. They used
+    // to check only length and match, so a password like "azdahpole" passed the
+    // browser and was refused by the server for a rule the screen never
+    // mentioned. Four members were stuck on this screen, guessing.
+    if (pwForm.newPw !== pwForm.confirm) { setPwMsg({text:'The two new passwords do not match',ok:false}); return; }
     if (pwForm.newPw.length < 8) { setPwMsg({text:'Password must be at least 8 characters',ok:false}); return; }
+    if (!/[A-Z]/.test(pwForm.newPw)) { setPwMsg({text:'Password must contain at least one capital letter',ok:false}); return; }
+    if (!/[0-9]/.test(pwForm.newPw)) { setPwMsg({text:'Password must contain at least one number',ok:false}); return; }
+    if (pwForm.newPw === pwForm.current) { setPwMsg({text:'Your new password must be different from your current one',ok:false}); return; }
     setPwBusy(true);
     const res = await fetch('/api/member/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:pwForm.current,newPassword:pwForm.newPw})});
     const data = await res.json();
@@ -343,7 +350,11 @@ export default function DashboardPage() {
         .tab-btn{background:none;transition:color .15s}
         @media(max-width:800px){.dash-top,.dash-stats{grid-template-columns:1fr !important}}
         .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(6px)}
-        .modal-card{background:#1A1410;border:1px solid #3A2B1E;border-radius:14px;width:100%;max-width:420px;animation:modalIn .25s ease forwards}
+        .modal-card{background:#1A1410;border:1px solid #3A2B1E;border-radius:14px;width:100%;max-width:420px;animation:modalIn .25s ease forwards;
+          /* The card scrolls inside itself. Centred in a fixed parent with no
+             scroll, a modal taller than the screen is clipped at both ends and
+             its button cannot be reached at all. */
+          max-height:calc(100vh - 32px);max-height:calc(100dvh - 32px);overflow-y:auto}
         input{outline:none;background:transparent;width:100%;color:${CREAM};font-size:13px;font-family:inherit;border:none}
         input::placeholder{color:#3A2B1E}
         input:-webkit-autofill{-webkit-box-shadow:0 0 0 30px #1A1410 inset !important;-webkit-text-fill-color:${CREAM} !important}
@@ -897,7 +908,7 @@ export default function DashboardPage() {
                 <p style={{color:MUTED,fontSize:12,marginTop:3}}>
                   {member?.must_change_password
                     ? 'Please set a new password before continuing.'
-                    : 'Choose a strong password (min 8 characters)'}
+                    : 'Choose a new password.'}
                 </p>
               </div>
               {!member?.must_change_password&&(
@@ -924,6 +935,28 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
+              {/* The rules, ticking off as they type. The server enforces all
+                  three; before this the screen named only the first, so the
+                  other two could only be discovered by being refused. */}
+              {(() => {
+                const pw = pwForm.newPw;
+                const rules: [boolean, string][] = [
+                  [pw.length >= 8, 'At least 8 characters'],
+                  [/[A-Z]/.test(pw), 'One capital letter'],
+                  [/[0-9]/.test(pw), 'One number'],
+                ];
+                return (
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'6px 14px',marginTop:-4}}>
+                    {rules.map(([ok,text])=>(
+                      <span key={text} style={{display:'flex',alignItems:'center',gap:5,fontSize:11.5,
+                        color: pw.length===0 ? MUTED : ok ? '#4ade80' : '#f87171'}}>
+                        <span style={{fontSize:12,lineHeight:1}}>{pw.length===0?'·':ok?'✓':'✕'}</span>{text}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
+
               {pwMsg&&(
                 <div style={{padding:'10px 12px',background:pwMsg.ok?'rgba(74,222,128,.08)':'rgba(248,113,113,.08)',border:`1px solid ${pwMsg.ok?'rgba(74,222,128,.25)':'rgba(248,113,113,.25)'}`,borderRadius:7,fontSize:12,color:pwMsg.ok?'#4ade80':'#f87171'}}>
                   {pwMsg.text}
