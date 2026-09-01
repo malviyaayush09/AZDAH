@@ -2,8 +2,8 @@
 
 // One home for the studio's Instagram, so the handle is not spelled out in
 // four separate files.
-export const INSTAGRAM = 'https://instagram.com/azdah.pole';
-export const INSTAGRAM_HANDLE = '@azdah.pole';
+export const INSTAGRAM = 'https://instagram.com/polewithazdah';
+export const INSTAGRAM_HANDLE = '@polewithazdah';
 
 // Instagram's glyph, inline: one more network request for a logo is not worth it.
 export function IgIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
@@ -30,7 +30,7 @@ export function IgChip({ className = '' }: { className?: string }) {
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer"
         className={`ig-chip ${className}`.trim()}
-        aria-label="AZDAH on Instagram, @azdah.pole">
+        aria-label={`AZDAH on Instagram, ${INSTAGRAM_HANDLE}`}>
         <IgIcon size={15} />
         <span>{INSTAGRAM_HANDLE}</span>
       </a>
