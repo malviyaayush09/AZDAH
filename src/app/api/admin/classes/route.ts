@@ -74,6 +74,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Title must be 2–80 characters' }, { status: 400 });
   }
 
+  // A class with no discipline is filtered out of every member's calendar,
+  // because members only see the disciplines their pack covers. It still shows
+  // publicly, so the studio advertises a class nobody can book and reads the
+  // empty register as a lack of interest. Refuse it rather than create it.
+  if (!category) {
+    return NextResponse.json(
+      { error: 'Pick a class type. Without one, members cannot see or book this class.' },
+      { status: 400 },
+    );
+  }
+
   const db = getServiceClient();
   // Category matters: the member class list filters by the categories a pack
   // allows, so a class saved without one is invisible to tier-restricted

@@ -66,6 +66,17 @@ export async function POST(req: NextRequest) {
   const [ty, tm, td] = todayIST().split('-').map(Number);
   const today = new Date(Date.UTC(ty, tm - 1, td));
 
+  // A class with no discipline is filtered out of every member's calendar,
+  // because members only see the disciplines their pack covers. It still shows
+  // publicly, so the studio advertises a class nobody can book and reads the
+  // empty register as a lack of interest. Refuse it rather than create it.
+  if (!category) {
+    return NextResponse.json(
+      { error: 'Pick a class type. Without one, members cannot see or book this class.' },
+      { status: 400 },
+    );
+  }
+
   const classes: { title: string; trainer_name: string | null; class_date: string; start_time: string; end_time: string; capacity: number; category: string | null; instructor_id: string | null }[] = [];
 
   for (let w = 0; w < weeks; w++) {

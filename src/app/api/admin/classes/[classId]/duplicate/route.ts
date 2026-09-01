@@ -23,7 +23,7 @@ export async function POST(
   const db = getServiceClient();
   const { data: cls } = await db
     .from('classes')
-    .select('title, trainer_name, class_date, start_time, end_time, capacity')
+    .select('title, trainer_name, class_date, start_time, end_time, capacity, category, instructor_id')
     .eq('id', params.classId)
     .single();
 
@@ -34,6 +34,15 @@ export async function POST(
   nextDate.setDate(nextDate.getDate() + 7);
   const nextDateStr = nextDate.toISOString().split('T')[0];
 
+  /**
+   * category and instructor_id were not being copied.
+   *
+   * A member only ever sees classes in the disciplines their pack covers, so a
+   * class with no category is filtered out of every member's calendar. It still
+   * appears on the public schedule, which makes it worse: the studio advertises
+   * a class, sees no bookings, and concludes nobody wanted it. Every class ever
+   * made with the Duplicate button was born unbookable.
+   */
   const { data: newCls, error } = await db.from('classes').insert({
     title: cls.title,
     trainer_name: cls.trainer_name,
@@ -41,6 +50,8 @@ export async function POST(
     start_time: cls.start_time,
     end_time: cls.end_time,
     capacity: cls.capacity,
+    category: cls.category,
+    instructor_id: cls.instructor_id,
   }).select('id').single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
