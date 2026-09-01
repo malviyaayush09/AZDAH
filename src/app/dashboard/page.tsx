@@ -743,7 +743,11 @@ export default function DashboardPage() {
             {tab==='my-bookings'&&(
               <>
                 <div style={{marginBottom:14,padding:'9px 14px',background:'rgba(255,255,255,.03)',border:`1px solid ${BORDER}`,borderRadius:8,fontSize:12,color:MUTED,display:'flex',alignItems:'center',gap:8}}>
-                  <Info size={13} strokeWidth={1.5} style={{flexShrink:0}} /> Cancelling frees your place for someone else, but the class is still counted against your pack. To move a class, use your reschedule for the month instead — at least 6 hours before it starts.
+                  {/* The grace period is invisible unless we say so, and the
+                      old wording flatly contradicted it — it told members the
+                      class is always counted, which is no longer true for the
+                      first fifteen minutes. */}
+                  <Info size={13} strokeWidth={1.5} style={{flexShrink:0}} /> Change your mind within 15 minutes of booking and cancelling gives the class straight back. After that, cancelling frees your place for someone else but the class still counts against your pack — to move it, use your reschedule for the month instead, at least 6 hours before it starts.
                 </div>
                 {!member!.reschedule_used&&!rescheduleMode&&myBookings.length>0&&(
                   <div style={{marginBottom:16,padding:'10px 14px',background:'rgba(37,99,235,.08)',border:'1px solid rgba(37,99,235,.25)',borderRadius:8,fontSize:12,color:'#93c5fd'}}>
