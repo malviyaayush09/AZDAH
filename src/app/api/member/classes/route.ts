@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     .gte('class_date', today)
     .order('class_date', { ascending: true })
     .order('start_time', { ascending: true })
-    .limit(400);
+    .limit(2000);   // see the note in /api/classes/public — same failure shape
   if (allowed && allowed.length) classQuery = classQuery.in('category', allowed);
 
   const [classRes, bookingRes, waitlistRes] = await Promise.all([

@@ -58,7 +58,12 @@ export async function GET(req: NextRequest) {
     .gte('created_at', since)
     .lte('created_at', settleCutoff)
     .order('created_at', { ascending: false })
-    .limit(60);
+    // 500, not 60. At 51 membership purchases in a month the old cap was five
+    // signups from being breached, and breaching it is silent: the oldest
+    // intents drop out of the check and a captured payment that never
+    // provisioned would simply never be reported. This warning exists to catch
+    // money taken with nothing delivered, so it must not quietly stop looking.
+    .limit(500);
 
   const candidates = intents || [];
   if (candidates.length === 0) return NextResponse.json({ orphans: [], checked: 0 });

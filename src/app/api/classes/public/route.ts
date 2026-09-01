@@ -34,7 +34,10 @@ export async function GET() {
     .gte('class_date', today)
     .order('class_date', { ascending: true })
     .order('start_time', { ascending: true })
-    .limit(400);
+    // Ordered ascending, so a cap hides the FURTHEST-OUT classes — the same
+    // shape as the fortnight cap that hid everything past 12 September. Kept
+    // well above any plausible schedule.
+    .limit(2000);
 
   const list = classes || [];
 
