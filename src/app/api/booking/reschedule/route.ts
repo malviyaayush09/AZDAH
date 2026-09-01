@@ -5,6 +5,7 @@ import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
 import { sendRescheduleConfirmed } from '@/lib/whatsapp';
 import { classHasStarted, isPastNoticeWindow, NOTICE_HOURS } from '@/lib/date';
+import { pickPackForClass, packCoversCategory, getSpendablePacks } from '@/lib/pack';
 
 export async function POST(req: NextRequest) {
   // Auth
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
   // Validate old booking belongs to member
   const { data: oldBooking } = await db
     .from('bookings')
-    .select('id, class_id, status')
+    .select('id, class_id, status, pack_id')
     .eq('id', oldBookingId)
     .eq('member_id', memberId)
     .single();
@@ -116,14 +117,53 @@ export async function POST(req: NextRequest) {
     .eq('id', memberId)
     .single();
 
+  /**
+   * Which pack pays for the replacement.
+   *
+   * The new booking used to be written with no pack_id at all. Usage is counted
+   * as "bookings whose pack_id is this pack", so the old booking stopped
+   * counting the moment it became 'rescheduled' and the new one never started
+   * — every reschedule quietly handed the member a free class. Nobody had hit
+   * it only because the feature was barely used.
+   *
+   * Prefer the pack that paid for the original booking, so a reschedule stays
+   * on the same pack and remains net-zero. Fall back to the ordinary selection
+   * when that pack cannot cover the new class or is no longer spendable.
+   */
+  let newPackId: string | null = null;
+  if (oldBooking?.pack_id) {
+    const spendable = await getSpendablePacks(db, memberId);
+    const same = spendable.find((p) => p.id === oldBooking.pack_id);
+    if (same && packCoversCategory(same, newClass.category ?? null)) newPackId = same.id;
+  }
+  if (!newPackId) {
+    const { pack } = await pickPackForClass(db, memberId, newClass.category ?? null);
+    newPackId = pack?.id ?? null;
+  }
+  if (!newPackId) {
+    return NextResponse.json(
+      { error: 'No pack of yours covers that class. Please pick one your pack includes.' },
+      { status: 403 },
+    );
+  }
+
   // Execute reschedule sequentially so partial failures can be rolled back
   const r1 = await db.from('bookings').update({ status: 'rescheduled' }).eq('id', oldBookingId);
   if (r1.error) return NextResponse.json({ error: 'Reschedule failed' }, { status: 500 });
 
-  const r2 = await db.from('bookings').insert({ member_id: memberId, class_id: newClassId, status: 'confirmed', rescheduled_from: oldBookingId });
+  /**
+   * Upsert, not insert. (member_id, class_id) is unique and a cancelled or
+   * rescheduled booking keeps its row, so moving into a class the member has
+   * ever held before collided with that row and returned a bare
+   * "Reschedule failed" with nothing the member could act on.
+   */
+  const r2 = await db.from('bookings').upsert(
+    { member_id: memberId, class_id: newClassId, status: 'confirmed', rescheduled_from: oldBookingId, pack_id: newPackId },
+    { onConflict: 'member_id,class_id' },
+  );
   if (r2.error) {
     await db.from('bookings').update({ status: 'confirmed' }).eq('id', oldBookingId);
-    return NextResponse.json({ error: 'Reschedule failed' }, { status: 500 });
+    return NextResponse.json({ error: `Could not move your booking: ${r2.error.message}` }, { status: 500 });
   }
 
   const r3 = await db.from('members').update({ reschedule_used_this_month: true }).eq('id', memberId);
