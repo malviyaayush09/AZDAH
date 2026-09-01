@@ -37,6 +37,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Query failed' }, { status: 500 });
   }
 
+  /**
+   * With the WhatsApp kill switch off, sendX() returns immediately and throws
+   * nothing — so the loop below would mark every member as reminded while not a
+   * single message left the building. Those flags are never revisited, so the
+   * day the switch is turned on, everyone already marked silently never hears
+   * from us. Two members were already in that state.
+   *
+   * Do nothing at all rather than record work that did not happen.
+   */
+  if (process.env.WHATSAPP_ENABLED !== 'true') {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: 'WhatsApp is off. Nothing sent, and nothing marked as sent, so these are still due when it is enabled.',
+    });
+  }
+
   let sent = 0;
   for (const member of expiring || []) {
     try {
