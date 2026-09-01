@@ -939,7 +939,14 @@ export default function DashboardPage() {
                   <label style={{display:'block',fontSize:11,color:MUTED,marginBottom:6,textTransform:'uppercase',letterSpacing:'.1em'}}>{label}</label>
                   <div style={{display:'flex',alignItems:'center',border:`1px solid ${BORDER}`,borderRadius:8,background:DARK,padding:'0 12px',transition:'border-color .15s'}}
                     onFocus={e=>(e.currentTarget.style.borderColor=ORANGE)} onBlur={e=>(e.currentTarget.style.borderColor=BORDER)}>
+                    {/* Without an autocomplete hint Safari guesses, and on a
+                        field it reads as a signup it puts its own Strong
+                        Password panel over the box and fights what is typed —
+                        which looks exactly like a field that will not accept
+                        input. Naming each field stops the guessing. */}
                     <input type={show?'text':'password'} required value={pwForm[key as keyof typeof pwForm]}
+                      name={key==='current'?'current-password':key==='newPw'?'new-password':'confirm-password'}
+                      autoComplete={key==='current'?'current-password':'new-password'}
                       onChange={e=>setPwForm(p=>({...p,[key]:e.target.value}))} placeholder="••••••••" style={{flex:1,padding:'11px 0'}} />
                     {key!=='confirm'&&(
                       <button type="button" onClick={toggle} style={{background:'none',border:'none',cursor:'pointer',color:MUTED,fontSize:15,padding:'0 0 0 8px'}}>
