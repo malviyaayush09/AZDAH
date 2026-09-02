@@ -170,16 +170,28 @@ export async function ensurePackForLegacyMember(db: ServiceClient, memberId: str
  * Ordered by the one expiring soonest, which is the order they are spent in
  * so nothing lapses while a later pack is used.
  */
-export async function getSpendablePacks(db: ServiceClient, memberId: string): Promise<MemberPack[]> {
+/**
+  * Packs a member may spend on a given day.
+  *
+  * `onDate` defaults to today, which is right for "what do I hold right now".
+  * When booking, pass the CLASS date instead: a pack that expires on the 29th
+  * cannot pay for a class on the 1st, and judging this against today let
+  * members book past their own expiry and take a class they had not paid for.
+  */
+export async function getSpendablePacks(
+  db: ServiceClient,
+  memberId: string,
+  onDate?: string,
+): Promise<MemberPack[]> {
   await ensurePackForLegacyMember(db, memberId);
-  const today = todayIST();
+  const day = onDate || todayIST();
   const { data } = await db
     .from('member_packs')
     .select('id, plan_id, plan_name, classes_included, allowed_categories, category_limits, starts_on, expires_on, is_frozen')
     .eq('member_id', memberId)
     .eq('is_frozen', false)
-    .lte('starts_on', today)
-    .gte('expires_on', today)
+    .lte('starts_on', day)
+    .gte('expires_on', day)
     .order('expires_on', { ascending: true });
 
   return (data || []) as MemberPack[];
@@ -249,9 +261,29 @@ export async function pickPackForClass(
   db: ServiceClient,
   memberId: string,
   category: string | null,
-): Promise<{ pack: MemberPack | null; reason: 'ok' | 'no_pack' | 'not_covered' | 'exhausted' }> {
-  const packs = await getSpendablePacks(db, memberId);
-  if (packs.length === 0) return { pack: null, reason: 'no_pack' };
+  classDate?: string,
+): Promise<{
+  pack: MemberPack | null;
+  reason: 'ok' | 'no_pack' | 'not_covered' | 'exhausted' | 'expires_before_class';
+  expiresOn?: string;
+}> {
+  const packs = await getSpendablePacks(db, memberId, classDate);
+  if (packs.length === 0) {
+    /**
+     * Separate "you hold nothing" from "you hold something that runs out
+     * before this class". Both used to answer "Membership expired. Please
+     * renew." to a member who was plainly still a member, which reads as a
+     * fault in the site rather than a date they can act on.
+     */
+    if (classDate) {
+      const live = await getSpendablePacks(db, memberId);
+      if (live.length) {
+        const last = live.map((p) => p.expires_on).sort().slice(-1)[0];
+        return { pack: null, reason: 'expires_before_class', expiresOn: last };
+      }
+    }
+    return { pack: null, reason: 'no_pack' };
+  }
 
   const covering = packs.filter((p) => packCoversCategory(p, category));
   if (covering.length === 0) return { pack: null, reason: 'not_covered' };

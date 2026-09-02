@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
   // answer is the one expiring soonest that covers this category and still has
   // a credit. Expiry is judged per pack, not from members.plan_end, because
   // that column only names the primary pack.
-  const { pack, reason } = await pickPackForClass(db, memberId, cls.category ?? null);
+  const { pack, reason, expiresOn } = await pickPackForClass(db, memberId, cls.category ?? null, cls.class_date);
 
   if (!pack) {
     if (reason === 'not_covered') {
@@ -70,6 +70,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'You have used every class in your packs. Please purchase another pack to continue.' },
         { status: 400 }
+      );
+    }
+    if (reason === 'expires_before_class') {
+      const ends = expiresOn
+        ? new Date(expiresOn + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })
+        : 'before this class';
+      return NextResponse.json(
+        { error: `Your pack runs until ${ends}, so it cannot cover this class. Please renew to book beyond that date.` },
+        { status: 403 }
       );
     }
     return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });

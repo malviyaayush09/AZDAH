@@ -132,12 +132,12 @@ export async function POST(req: NextRequest) {
    */
   let newPackId: string | null = null;
   if (oldBooking?.pack_id) {
-    const spendable = await getSpendablePacks(db, memberId);
+    const spendable = await getSpendablePacks(db, memberId, newClass.class_date);
     const same = spendable.find((p) => p.id === oldBooking.pack_id);
     if (same && packCoversCategory(same, newClass.category ?? null)) newPackId = same.id;
   }
   if (!newPackId) {
-    const { pack } = await pickPackForClass(db, memberId, newClass.category ?? null);
+    const { pack } = await pickPackForClass(db, memberId, newClass.category ?? null, newClass.class_date);
     newPackId = pack?.id ?? null;
   }
   if (!newPackId) {

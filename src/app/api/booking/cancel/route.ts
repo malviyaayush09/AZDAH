@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
     // Promote only into a class this member could have booked themselves:
     // some pack of theirs must cover the category and still hold a credit.
     // Judged per pack — members.plan_end only names the primary one.
-    const { pack: payer } = await pickPackForClass(db, entry.member_id, cls?.category ?? null);
+    const { pack: payer } = await pickPackForClass(db, entry.member_id, cls?.category ?? null, cls?.class_date);
     if (!payer) continue;
 
     next = { id: entry.id, member_id: entry.member_id, members: m };
