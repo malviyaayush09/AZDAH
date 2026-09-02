@@ -362,6 +362,16 @@ export default function DashboardPage() {
   const weekHasAny=weekDays.some(d=>(byDate.get(toYMD(d))||[]).length>0);
   // Total across every pack. null means a duration-based pack with no limit.
   const noCreditsLeft = member?.classes_remaining === 0;
+  /**
+   * Expired is not the same as used up, and telling someone the wrong one costs
+   * a renewal. A member whose pack has run out still holds unused credits on
+   * it -- the API reports classes_remaining 0 while each pack still reads
+   * "4 left" -- and they were being shown "No classes left", which reads as
+   * "you took all your classes" when in fact they paid for classes they never
+   * took and simply ran out of time. Fifteen packs expire between 28 Sept and
+   * 2 Oct, so this is the screen a good part of the studio is about to see.
+   */
+  const packExpired = !!member && livePacks.length === 0;
   const weekLabel=(()=>{const a=weekDays[0],b=weekDays[6];
     const f=(d:Date,y:boolean)=>d.toLocaleDateString('en-IN',{month:'short',...(y?{year:'numeric'}:{})});
     return a.getMonth()===b.getMonth()?`${a.getDate()} – ${b.getDate()} ${f(b,true)}`:`${a.getDate()} ${f(a,false)} – ${b.getDate()} ${f(b,true)}`;})();
@@ -485,7 +495,18 @@ export default function DashboardPage() {
 
           {/* A member with nothing left should not have to hunt for how to buy
               more -- this is exactly the moment the studio was losing them. */}
-          {livePacks.length>0 && livePacks.every(p=>p.remaining!==null&&p.remaining<=0) && (
+          {packExpired && (
+            <div style={{marginTop:16,padding:'13px 16px',background:'rgba(251,191,36,.08)',border:'1px solid rgba(251,191,36,.32)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'space-between',gap:14,flexWrap:'wrap'}}>
+              <span style={{fontSize:13,color:CREAM}}>
+                Your pack ran out on {fmtShortDate(member!.plan_end)}, so there is nothing to book against right now. Renew and you are straight back in.
+              </span>
+              <a href="/#membership" style={{fontSize:12,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',background:ORANGE,color:'#fff',padding:'9px 16px',borderRadius:6,textDecoration:'none',whiteSpace:'nowrap'}}>
+                Renew
+              </a>
+            </div>
+          )}
+
+          {!packExpired && livePacks.length>0 && livePacks.every(p=>p.remaining!==null&&p.remaining<=0) && (
             <div style={{marginTop:16,padding:'13px 16px',background:'rgba(248,52,51,.07)',border:'1px solid rgba(248,52,51,.28)',borderRadius:10,display:'flex',alignItems:'center',justifyContent:'space-between',gap:14,flexWrap:'wrap'}}>
               <span style={{fontSize:13,color:CREAM}}>You have used every class on your packs.</span>
               <a href="/#membership" style={{fontSize:12,fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',background:ORANGE,color:'#fff',padding:'9px 16px',borderRadius:6,textDecoration:'none',whiteSpace:'nowrap'}}>
@@ -782,7 +803,9 @@ export default function DashboardPage() {
                                       // Offering "Book" to someone with no credits left just
                                       // earns them an error. The server still decides; this
                                       // only stops the pointless click.
-                                      noCreditsLeft?(
+                                      packExpired?(
+                                        <div style={{fontSize:10.5,color:'#fbbf24',textAlign:'center',padding:'7px 0'}}>Pack expired</div>
+                                      ):noCreditsLeft?(
                                         <div style={{fontSize:10.5,color:MUTED,textAlign:'center',padding:'7px 0'}}>No classes left</div>
                                       ):packEndsBefore?(
                                         // The date is past every pack that could pay for this
