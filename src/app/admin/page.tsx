@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { Toast } from '@/components/Toast';
+import { api } from '@/lib/api';
 
 type MemberPack = {
   id: string; name: string;
@@ -290,14 +291,24 @@ export default function AdminPage() {
   }, [revenue]);
 
   async function fetchAll() {
-    const [mRes, cRes, ovRes] = await Promise.all([fetch('/api/admin/members'), fetch('/api/admin/classes'), fetch('/api/admin/overview-stats')]);
-    if (mRes.status === 401 || mRes.status === 403) { router.push('/login'); return; }
-    const [mData, cData, ovData] = await Promise.all([mRes.json(), cRes.json(), ovRes.json()]);
-    setMembers(mData.members || []);
-    setStats(mData.stats || null);
-    setClasses(cData.classes || []);
-    setOverviewStats(ovData.today ? ovData : null);
+    /**
+     * Three bare fetches in Promise.all, then three bare .json() calls. One
+     * failure rejected before setLoading(false) ran and left the studio owner
+     * on "Loading..." with no way back -- locked out of her own panel by a
+     * dropped request.
+     */
+    const [m, c, ov] = await Promise.all([
+      api<{ members?: Member[]; stats?: AdminStats }>('/api/admin/members'),
+      api<{ classes?: ClassSlot[] }>('/api/admin/classes'),
+      api<OverviewStats>('/api/admin/overview-stats'),
+    ]);
+    if (m.status === 401 || m.status === 403) { router.push('/login'); return; }
+    setMembers(m.data?.members || []);
+    setStats(m.data?.stats || null);
+    setClasses(c.data?.classes || []);
+    setOverviewStats(ov.data?.today ? ov.data : null);
     setLoading(false);
+    if (!m.ok || !c.ok) setMsg({ text: (m.ok ? c.error : m.error)!, ok: false });
 
     // Checked separately: it calls out to Razorpay per pending order, so it
     // must not hold up the dashboard render.
@@ -310,7 +321,7 @@ export default function AdminPage() {
   async function addClass(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true); setMsg(null);
-    const res = await fetch('/api/admin/classes', {
+    const res = await api('/api/admin/classes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...newClass,
@@ -323,7 +334,7 @@ export default function AdminPage() {
           || null,
       }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setSaving(false);
     if (data.success) {
       setMsg({ text: 'Class scheduled!', ok: true });
@@ -345,8 +356,8 @@ export default function AdminPage() {
         window.open(`https://wa.me/${b.member.phone}?text=${text}`, '_blank');
       });
     }
-    const res = await fetch(`/api/admin/classes/${cls.id}/cancel`, { method: 'POST' });
-    const data = await res.json();
+    const res = await api(`/api/admin/classes/${cls.id}/cancel`, { method: 'POST' });
+    const data = res.data ?? {};
     if (data.success) {
       const released = data.released ?? 0;
       setMsg({
@@ -360,19 +371,19 @@ export default function AdminPage() {
   }
 
   async function toggleMember(id: string, active: boolean) {
-    const res = await fetch(`/api/admin/members/${id}`, {
+    const res = await api(`/api/admin/members/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: !active }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     if (data.success) fetchAll();
     else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
   async function openClassModal(cls: ClassSlot) {
     setViewingClass(cls); setClassBookings([]); setLoadingBookings(true);
-    const res = await fetch(`/api/admin/classes/${cls.id}/bookings`);
-    const data = await res.json();
+    const res = await api(`/api/admin/classes/${cls.id}/bookings`);
+    const data = res.data ?? {};
     setClassBookings(data.bookings || []);
     setLoadingBookings(false);
   }
@@ -380,8 +391,8 @@ export default function AdminPage() {
   async function loadRevenue(category?: string) {
     setRevLoading(true);
     const q = category && category !== 'all' ? `?category=${encodeURIComponent(category)}` : '';
-    const res = await fetch('/api/admin/revenue' + q);
-    const data = await res.json();
+    const res = await api('/api/admin/revenue' + q);
+    const data = res.data ?? {};
     setRevenue(data);
     setRevLoading(false);
   }
@@ -389,11 +400,11 @@ export default function AdminPage() {
   async function markAttendance(bookingId: string, attended: boolean) {
     if (!viewingClass) return;
     setAttendanceBusy(bookingId);
-    const res = await fetch(`/api/admin/classes/${viewingClass.id}/attendance`, {
+    const res = await api(`/api/admin/classes/${viewingClass.id}/attendance`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ bookingId, attended }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     if (data.success) {
       setClassBookings(prev => prev.map(b => b.id === bookingId ? { ...b, attended } : b));
     } else setMsg({ text: data.error || 'Failed to update attendance', ok: false });
@@ -402,8 +413,8 @@ export default function AdminPage() {
 
   async function duplicateClass(cls: ClassSlot) {
     setDupBusy(cls.id);
-    const res = await fetch(`/api/admin/classes/${cls.id}/duplicate`, { method: 'POST' });
-    const data = await res.json();
+    const res = await api(`/api/admin/classes/${cls.id}/duplicate`, { method: 'POST' });
+    const data = res.data ?? {};
     setDupBusy(null);
     if (data.success) {
       setMsg({ text: `Class duplicated to ${fmtDate(data.newDate)}!`, ok: true });
@@ -437,8 +448,8 @@ export default function AdminPage() {
   async function resetPassword(memberId: string) {
     if (!confirm('Reset this member\'s password? You will see the new password to share with them.')) return;
     setMemberActionBusy(memberId + '-reset');
-    const res = await fetch(`/api/admin/members/${memberId}/reset-password`, { method: 'POST' });
-    const data = await res.json();
+    const res = await api(`/api/admin/members/${memberId}/reset-password`, { method: 'POST' });
+    const data = res.data ?? {};
     setMemberActionBusy(null);
     if (data.ok) {
       // Show the password in a blocking alert so the admin can copy and relay it
@@ -453,11 +464,11 @@ export default function AdminPage() {
   async function submitRefund() {
     if (!refundModal) return;
     setMemberActionBusy(refundModal.id + '-refund');
-    const res = await fetch(`/api/admin/members/${refundModal.id}/refund`, {
+    const res = await api(`/api/admin/members/${refundModal.id}/refund`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: refundReason }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setMemberActionBusy(null);
     setRefundModal(null); setRefundReason('');
     setMsg(data.ok ? { text: `Refund ₹${(data.amount/100).toLocaleString('en-IN')} initiated`, ok: true } : { text: data.error || 'Refund failed', ok: false });
@@ -467,11 +478,11 @@ export default function AdminPage() {
   async function submitFreeze(action: 'freeze' | 'unfreeze') {
     if (!freezeModal) return;
     setMemberActionBusy(freezeModal.id + '-freeze');
-    const res = await fetch(`/api/admin/members/${freezeModal.id}/freeze`, {
+    const res = await api(`/api/admin/members/${freezeModal.id}/freeze`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, days: action === 'unfreeze' ? parseInt(freezeDays) : undefined }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setMemberActionBusy(null); setFreezeModal(null); setFreezeDays('');
     if (data.ok) {
       setMsg({ text: action === 'freeze' ? 'Membership frozen' : `Membership unfrozen — plan extended to ${data.new_plan_end}`, ok: true });
@@ -482,11 +493,11 @@ export default function AdminPage() {
   async function sendBroadcast(e: React.FormEvent) {
     e.preventDefault();
     setBroadcastBusy(true); setBroadcastResult(null);
-    const res = await fetch('/api/admin/broadcast', {
+    const res = await api('/api/admin/broadcast', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(broadcast),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setBroadcastBusy(false);
     if (data.ok) {
       setBroadcastResult({ sent: data.sent, failed: data.failed });
@@ -498,11 +509,11 @@ export default function AdminPage() {
     e.preventDefault();
     if (!recurring.days_of_week.length) { setMsg({ text: 'Select at least one day', ok: false }); return; }
     setRecurringSaving(true); setMsg(null);
-    const res = await fetch('/api/admin/classes/recurring', {
+    const res = await api('/api/admin/classes/recurring', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...recurring, capacity: parseInt(recurring.capacity), weeks: parseInt(recurring.weeks), category: recurringCategory }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setRecurringSaving(false);
     if (data.ok) {
       setMsg({ text: `${data.created} recurring classes created!`, ok: true });
@@ -519,8 +530,8 @@ export default function AdminPage() {
     if (!instructors.length) loadInstructors();
     if (templates.length) return;
     setTemplatesLoading(true);
-    const res = await fetch('/api/admin/class-templates');
-    const data = await res.json();
+    const res = await api('/api/admin/class-templates');
+    const data = res.data ?? {};
     setTemplates(data.templates || []);
     setTemplatesLoading(false);
   }
@@ -528,7 +539,7 @@ export default function AdminPage() {
   async function createTemplate(e: React.FormEvent) {
     e.preventDefault(); setTemplateSaving(true); setMsg(null);
     const inst = instructors.find(i => i.id === newTemplate.instructor_id);
-    const res = await fetch('/api/admin/class-templates', {
+    const res = await api('/api/admin/class-templates', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         ...newTemplate,
@@ -538,7 +549,7 @@ export default function AdminPage() {
         capacity: parseInt(newTemplate.capacity),
       }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setTemplateSaving(false);
     if (data.success) {
       setMsg({ text: 'Template created!', ok: true });
@@ -549,19 +560,19 @@ export default function AdminPage() {
 
   async function loadInstructors() {
     setInstructorsLoading(true);
-    const res = await fetch('/api/admin/instructors');
-    const data = await res.json();
+    const res = await api('/api/admin/instructors');
+    const data = res.data ?? {};
     setInstructors(data.instructors || []);
     setInstructorsLoading(false);
   }
 
   async function createInstructor(e: React.FormEvent) {
     e.preventDefault(); setInstructorSaving(true); setMsg(null);
-    const res = await fetch('/api/admin/instructors', {
+    const res = await api('/api/admin/instructors', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newInstructor),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setInstructorSaving(false);
     if (data.success) {
       window.alert(`Instructor ${data.instructor.name} created.\n\nLogin phone: ${data.instructor.phone}\nPassword: ${data.password}\n\nShare these — they log in on the normal login page and land on their own instructor dashboard.`);
@@ -573,11 +584,11 @@ export default function AdminPage() {
 
   async function toggleInstructor(id: string, active: boolean) {
     setInstructorBusy(id);
-    const res = await fetch(`/api/admin/instructors/${id}`, {
+    const res = await api(`/api/admin/instructors/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: !active }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setInstructorBusy(null);
     if (data.ok) loadInstructors(); else setMsg({ text: data.error || 'Failed', ok: false });
   }
@@ -585,11 +596,11 @@ export default function AdminPage() {
   async function resetInstructorPassword(id: string) {
     if (!confirm("Reset this instructor's password? You'll see the new one to share.")) return;
     setInstructorBusy(id);
-    const res = await fetch(`/api/admin/instructors/${id}`, {
+    const res = await api(`/api/admin/instructors/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'reset_password' }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setInstructorBusy(null);
     if (data.ok) window.alert(`New password for ${data.name} (+${data.phone}):\n\n${data.password}\n\nShare it with them.`);
     else setMsg({ text: data.error || 'Failed', ok: false });
@@ -598,8 +609,8 @@ export default function AdminPage() {
   async function deleteInstructor(id: string) {
     if (!confirm('Remove this instructor? Their classes stay but become unassigned.')) return;
     setInstructorBusy(id);
-    const res = await fetch(`/api/admin/instructors/${id}`, { method: 'DELETE' });
-    const data = await res.json();
+    const res = await api(`/api/admin/instructors/${id}`, { method: 'DELETE' });
+    const data = res.data ?? {};
     setInstructorBusy(null);
     if (data.ok) { setInstructors(prev => prev.filter(i => i.id !== id)); setMsg({ text: 'Instructor removed', ok: true }); }
     else setMsg({ text: data.error || 'Failed', ok: false });
@@ -607,8 +618,8 @@ export default function AdminPage() {
 
   async function loadWorkshops() {
     setWorkshopsLoading(true);
-    const res = await fetch('/api/admin/workshops');
-    const data = await res.json();
+    const res = await api('/api/admin/workshops');
+    const data = res.data ?? {};
     setWorkshops(data.workshops || []);
     setOrphanedPayments(data.orphaned || []);
     setWorkshopsLoading(false);
@@ -618,7 +629,7 @@ export default function AdminPage() {
     e.preventDefault(); setWorkshopSaving(true); setMsg(null);
     const priceNum = Number(newWorkshop.price || 0);
     if (isNaN(priceNum) || priceNum < 0) { setWorkshopSaving(false); setMsg({ text: 'Enter a valid price (0 for free)', ok: false }); return; }
-    const res = await fetch('/api/admin/workshops', {
+    const res = await api('/api/admin/workshops', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: newWorkshop.title,
@@ -632,7 +643,7 @@ export default function AdminPage() {
         location: newWorkshop.location || null,
       }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setWorkshopSaving(false);
     if (data.success) {
       setMsg({ text: `Workshop created${data.workshop.price_paise === 0 ? ' (free)' : ''}!`, ok: true });
@@ -652,11 +663,11 @@ export default function AdminPage() {
       if (!ok) return;
     }
     setWorkshopBusy(w.id);
-    const res = await fetch(`/api/admin/workshops/${w.id}`, {
+    const res = await api(`/api/admin/workshops/${w.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_active: !w.is_active }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setWorkshopBusy(null);
     if (data.success) loadWorkshops(); else setMsg({ text: data.error || 'Failed', ok: false });
   }
@@ -674,8 +685,8 @@ export default function AdminPage() {
     }
     if (!confirm(`Delete "${w.title}"? This can't be undone.`)) return;
     setWorkshopBusy(w.id);
-    const res = await fetch(`/api/admin/workshops/${w.id}`, { method: 'DELETE' });
-    const data = await res.json();
+    const res = await api(`/api/admin/workshops/${w.id}`, { method: 'DELETE' });
+    const data = res.data ?? {};
     setWorkshopBusy(null);
     if (data.success) { setWorkshops(prev => prev.filter(x => x.id !== w.id)); setMsg({ text: 'Workshop deleted', ok: true }); }
     else setMsg({ text: data.error || 'Failed', ok: false });
@@ -683,8 +694,8 @@ export default function AdminPage() {
 
   async function viewRegistrations(w: Workshop) {
     setViewingWorkshop(w); setWorkshopRegs([]); setRegsLoading(true);
-    const res = await fetch(`/api/admin/workshops/${w.id}/registrations`);
-    const data = await res.json();
+    const res = await api(`/api/admin/workshops/${w.id}/registrations`);
+    const data = res.data ?? {};
     setWorkshopRegs(data.registrations || []);
     setRegsLoading(false);
   }
@@ -692,8 +703,8 @@ export default function AdminPage() {
   async function deleteTemplate(id: string) {
     if (!confirm('Delete this template? This will not affect already-created classes.')) return;
     setTemplateDeleteBusy(id);
-    const res = await fetch(`/api/admin/class-templates/${id}`, { method: 'DELETE' });
-    const data = await res.json();
+    const res = await api(`/api/admin/class-templates/${id}`, { method: 'DELETE' });
+    const data = res.data ?? {};
     setTemplateDeleteBusy(null);
     if (data.success) {
       setTemplates(prev => prev.filter(t => t.id !== id));
@@ -703,11 +714,11 @@ export default function AdminPage() {
 
   async function generateCycleAction(e: React.FormEvent) {
     e.preventDefault(); setGenCycleSaving(true); setGenCycleResult(null); setMsg(null);
-    const res = await fetch('/api/admin/generate-cycle', {
+    const res = await api('/api/admin/generate-cycle', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(genCycle),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setGenCycleSaving(false);
     if (data.success) {
       setGenCycleResult({ created: data.created, skipped: data.skipped });
@@ -722,15 +733,15 @@ export default function AdminPage() {
 
   async function loadPromoCodes() {
     setPromoLoading(true);
-    const res = await fetch('/api/admin/promo-codes');
-    const data = await res.json();
+    const res = await api('/api/admin/promo-codes');
+    const data = res.data ?? {};
     setPromoCodes(data.codes || []);
     setPromoLoading(false);
   }
 
   async function createPromoCode(e: React.FormEvent) {
     e.preventDefault(); setPromoSaving(true); setMsg(null);
-    const res = await fetch('/api/admin/promo-codes', {
+    const res = await api('/api/admin/promo-codes', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         code: newPromo.code,
@@ -739,7 +750,7 @@ export default function AdminPage() {
         expires_at: newPromo.expires_at || undefined,
       }),
     });
-    const data = await res.json();
+    const data = res.data ?? {};
     setPromoSaving(false);
     if (data.ok) {
       setMsg({ text: 'Promo code created!', ok: true });
@@ -749,7 +760,7 @@ export default function AdminPage() {
   }
 
   async function togglePromo(id: string, is_active: boolean) {
-    await fetch('/api/admin/promo-codes', {
+    await api('/api/admin/promo-codes', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_active: !is_active }),
     });
@@ -758,13 +769,13 @@ export default function AdminPage() {
 
   async function loadAuditLog() {
     setAuditLoading(true);
-    const res = await fetch('/api/admin/audit-log');
-    const data = await res.json();
+    const res = await api('/api/admin/audit-log');
+    const data = res.data ?? {};
     setAuditLogs(data.logs || []);
     setAuditLoading(false);
   }
 
-  async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); router.push('/login'); }
+  async function logout() { await api('/api/auth/logout', { method: 'POST' }); router.push('/login'); }
 
   // Ten destinations read as a wall when they are one flat list. Grouping
   // means she scans four headings instead of ten words.
@@ -904,7 +915,7 @@ export default function AdminPage() {
 
 Only do this if you have already sorted it out — set them up under another number, or refunded them. The payment itself is not touched, and the audit log records this.`)) return;
     setOrphanBusy(o.order_id);
-    const res = await fetch('/api/admin/orphaned-payments/resolve', {
+    const res = await api('/api/admin/orphaned-payments/resolve', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order_id: o.order_id }),
     });
@@ -922,8 +933,8 @@ Only do this if you have already sorted it out — set them up under another num
 
 They have no bookings and no payments, so nothing is lost. This cannot be undone.`)) return;
     setMemberActionBusy(m.id + '-del');
-    const res = await fetch(`/api/admin/members/${m.id}`, { method: 'DELETE' });
-    const d = await res.json().catch(() => ({}));
+    const res = await api(`/api/admin/members/${m.id}`, { method: 'DELETE' });
+    const d = res.data ?? {};
     setMemberActionBusy(null);
     if (res.ok && d.success) {
       setMsg({ text: `${d.name} deleted.`, ok: true });
@@ -940,8 +951,8 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
     if (memberDates[id]) return;
     setDatesBusy(id);
     try {
-      const r = await fetch(`/api/admin/bookings?member_id=${id}`);
-      const d = r.ok ? await r.json() : null;
+      const r = await api(`/api/admin/bookings?member_id=${id}`);
+      const d = r.data;
       setMemberDates(p => ({ ...p, [id]: d?.bookings || [] }));
     } catch { setMemberDates(p => ({ ...p, [id]: [] })); }
     setDatesBusy(null);

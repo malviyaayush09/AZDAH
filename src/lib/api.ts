@@ -36,7 +36,11 @@ export const TIMEOUT_MS = 20_000;
  * Pass `json` and the method defaults to POST with the right Content-Type, so
  * call sites stop repeating the same three lines of boilerplate.
  */
-export async function api<T = Record<string, unknown>>(
+// The default matches what res.json() gave before -- these call sites were
+// already untyped, and pretending otherwise would only mean 29 casts that
+// assert something nobody checked. Pass a generic where the shape is known.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function api<T = any>(
   url: string,
   init: RequestInit & { json?: unknown } = {},
   timeoutMs: number = TIMEOUT_MS,
@@ -67,18 +71,23 @@ export async function api<T = Record<string, unknown>>(
 
     const body = (data ?? {}) as { error?: string; success?: boolean };
     const ok = res.ok && !body.error && body.success !== false;
+    const error = ok ? null : body.error || (res.status >= 500 ? SERVER : GENERIC);
     return {
       ok,
       status: res.status,
-      data: data as T,
-      error: ok ? null : body.error || (res.status >= 500 ? SERVER : GENERIC),
+      // On a failure with no body of its own, `data` carries the message too.
+      // Plenty of call sites read `data.error || 'Failed'`, and 'Failed' tells
+      // nobody anything; this way they inherit a usable sentence for free.
+      data: (data ?? { error }) as T,
+      error,
     };
   } catch (err) {
+    const error = (err as Error)?.name === 'AbortError' ? SLOW : NETWORK;
     return {
       ok: false,
       status: 0,
-      data: null,
-      error: (err as Error)?.name === 'AbortError' ? SLOW : NETWORK,
+      data: { error } as unknown as T,
+      error,
     };
   } finally {
     clearTimeout(timer);
