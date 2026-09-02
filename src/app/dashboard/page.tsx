@@ -16,6 +16,7 @@ type MemberInfo = {
     id: string; name: string;
     classes_included: number | null; used: number; remaining: number | null;
     by_category?: { category: string; limit: number; used: number; remaining: number }[];
+    allowed_categories?: string[] | null;
     starts_on: string; expires_on: string; is_frozen: boolean;
   }[];
   must_change_password?: boolean; is_frozen?: boolean;
@@ -23,6 +24,7 @@ type MemberInfo = {
 type ClassSlot = {
   id: string; title: string; trainer_name: string | null;
   class_date: string; start_time: string; end_time: string;
+  category?: string | null;
   is_full: boolean;
   my_booking_id: string | null; my_booking_status: string | null;
   on_waitlist?: boolean;
@@ -108,6 +110,35 @@ export default function DashboardPage() {
     Math.ceil((new Date(d + 'T00:00:00').getTime() - new Date(todayStr + 'T00:00:00').getTime()) / 86400000);
   // Packs worth showing: still running today. Expired ones would only add noise.
   const livePacks = (member?.packs || []).filter((p) => p.expires_on >= todayStr);
+
+  /**
+   * The last date any pack of theirs could pay for a class of this discipline.
+   *
+   * Mirrors what the server does when booking: a pack must cover the category,
+   * still hold a credit in it, and be unexpired on the day of the class. Judged
+   * per discipline on purpose -- a Pole pack ending on the 29th says nothing
+   * about a Mobility pack running to November.
+   *
+   * null means no pack of theirs covers this discipline at all, which is a
+   * different message and left to the server.
+   */
+  const coverUntil = (category: string | null): string | null => {
+    const usable = livePacks.filter((p) => {
+      if (p.is_frozen) return false;
+      if (p.by_category && p.by_category.length) {
+        // Combo: each discipline has its own separate allowance.
+        return !!category && p.by_category.some((c) => c.category === category && c.remaining > 0);
+      }
+      const hasCredit = p.remaining === null || p.remaining > 0;
+      if (!hasCredit) return false;
+      if (p.allowed_categories && p.allowed_categories.length) {
+        return !!category && p.allowed_categories.includes(category);
+      }
+      return true;
+    });
+    if (!usable.length) return null;
+    return usable.map((p) => p.expires_on).sort().slice(-1)[0];
+  };
   const CATEGORY_LABEL: Record<string, string> = {
     pole_regular: 'Pole',
     pole_nimisha: 'Pole (Nimisha)',
@@ -725,6 +756,10 @@ export default function DashboardPage() {
                                 const isFull=cls.is_full&&!isBooked;
                                 const isReschedTarget=rescheduleMode!==null;
                                 const wp=waitlistPos.find(w=>w.classId===cls.id);
+                                // Set to the pack's end date when this class falls
+                                // beyond everything that could pay for it.
+                                const cover=coverUntil(cls.category ?? null);
+                                const packEndsBefore=cover&&cls.class_date>cover?cover:null;
                                 return(
                                   <article key={cls.id} className="wk-card" style={{background:DARK,border:`1px solid ${isBooked?'rgba(74,222,128,.28)':isFull?'rgba(248,113,113,.22)':BORDER}`}}>
                                     <div style={{fontSize:11.5,color:ORANGE,fontWeight:600,marginBottom:3}}>{fmtTime(cls.start_time)}</div>
@@ -734,6 +769,7 @@ export default function DashboardPage() {
                                     {isBooked&&<div style={{fontSize:10,color:'#4ade80',fontWeight:600,marginBottom:6}}>Booked ✓</div>}
                                     {cls.on_waitlist&&<div style={{fontSize:10,color:'#fbbf24',fontWeight:600,marginBottom:6}}>{wp?`Waitlist #${wp.position}`:'On waitlist'}</div>}
                                     {isFull&&!cls.on_waitlist&&<div style={{fontSize:10,color:'#f87171',fontWeight:600,marginBottom:6}}>Full</div>}
+                                    {packEndsBefore&&!isBooked&&<div style={{fontSize:10,color:'#fbbf24',fontWeight:600,marginBottom:6}}>Beyond your pack</div>}
 
                                     {isReschedTarget?(
                                       !isBooked&&!isFull?(
@@ -748,6 +784,13 @@ export default function DashboardPage() {
                                       // only stops the pointless click.
                                       noCreditsLeft?(
                                         <div style={{fontSize:10.5,color:MUTED,textAlign:'center',padding:'7px 0'}}>No classes left</div>
+                                      ):packEndsBefore?(
+                                        // The date is past every pack that could pay for this
+                                        // discipline. Say it here, where the choice is made,
+                                        // rather than letting them click and be refused.
+                                        <div style={{fontSize:10,color:'#fbbf24',textAlign:'center',padding:'6px 0',lineHeight:1.3}}>
+                                          Pack ends<br />{fmtShortDate(packEndsBefore)}
+                                        </div>
                                       ):(
                                       <button className="book-btn wk-act" disabled={busyId===cls.id} onClick={()=>bookClass(cls.id)}
                                         style={{background:ORANGE,color:'#fff'}}>

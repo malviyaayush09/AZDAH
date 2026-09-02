@@ -62,6 +62,9 @@ export async function GET(req: NextRequest) {
       class_date: cls.class_date,
       start_time: cls.start_time,
       end_time: cls.end_time,
+      // Returned so the dashboard can tell, per class, whether any pack of
+      // theirs still reaches that date -- coverage is per discipline.
+      category: cls.category,
       is_full: bookedCount >= cls.capacity,
       my_booking_id: booking?.id || null,
       my_booking_status: booking?.status || null,

@@ -76,6 +76,10 @@ export async function GET(req: NextRequest) {
         // Combo packs only. A member who bought 4 pole and 8 mobility must be
         // told which is which, or "12 left" reads as 12 of anything.
         by_category: p.by_category,
+        // Which disciplines this pack may be spent on. The dashboard needs it to
+        // work out, per class, whether any pack of theirs can still reach that
+        // date -- a Pole pack ending sooner must not hide Mobility classes.
+        allowed_categories: p.allowed_categories,
         starts_on: p.starts_on,
         expires_on: p.expires_on,
         is_frozen: p.is_frozen,

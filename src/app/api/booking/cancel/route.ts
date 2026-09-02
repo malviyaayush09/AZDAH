@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     .order('created_at', { ascending: true });
 
   type WaitMember = { name: string; phone: string; is_active: boolean; is_frozen: boolean | null; plan_end: string | null; plan_start: string | null; plan_id: string | null };
-  let next: { id: string; member_id: string; members: WaitMember } | null = null;
+  let next: { id: string; member_id: string; members: WaitMember; packId: string } | null = null;
 
   for (const entry of queue || []) {
     const raw = entry.members;
@@ -87,13 +87,20 @@ export async function POST(req: NextRequest) {
     const { pack: payer } = await pickPackForClass(db, entry.member_id, cls?.category ?? null, cls?.class_date);
     if (!payer) continue;
 
-    next = { id: entry.id, member_id: entry.member_id, members: m };
+    next = { id: entry.id, member_id: entry.member_id, members: m, packId: payer.id };
     break;
   }
 
   if (next) {
+    /**
+     * pack_id was missing here. The loop above works out which pack should pay
+     * and then threw the answer away, so a promoted booking was charged to
+     * nothing -- usage counts bookings by pack_id, so every waitlist promotion
+     * was a free class. The same mistake as reschedule (733ec44). Nobody has
+     * been promoted in production yet, so no credits need repairing.
+     */
     await db.from('bookings').upsert(
-      { member_id: next.member_id, class_id: booking.class_id, status: 'confirmed' },
+      { member_id: next.member_id, class_id: booking.class_id, status: 'confirmed', pack_id: next.packId },
       { onConflict: 'member_id,class_id' }
     );
     await db.from('waitlist').delete().eq('id', next.id);
