@@ -166,6 +166,7 @@ export default function AdminPage() {
   const [weekStart, setWeekStart] = useState<Date>(() => mondayOf(new Date()));
   const [viewingClass, setViewingClass] = useState<ClassSlot | null>(null);
   const [classBookings, setClassBookings] = useState<ClassBooking[]>([]);
+  const [capBusy, setCapBusy] = useState(false);
   // Every confirmed booking in the visible week. Loaded up front so the
   // calendar can show who is in each class, and be filtered by instructor,
   // member or plan, without opening one class at a time.
@@ -382,6 +383,37 @@ export default function AdminPage() {
     const data = res.data ?? {};
     if (data.success) fetchAll();
     else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  /**
+   * Add or remove seats on a class that is already published.
+   *
+   * There was no way to do this at all: the only route to "one more spot on
+   * Thursday" was cancelling the class and rebuilding it, which throws away
+   * everyone's bookings. Adding a seat hands it to the front of the waitlist
+   * rather than to whoever refreshes first.
+   */
+  async function changeCapacity(delta: number) {
+    if (!viewingClass) return;
+    const next = viewingClass.capacity + delta;
+    setCapBusy(true);
+    const r = await api<{ capacity?: number; promoted?: { name: string }[] }>(
+      `/api/admin/classes/${viewingClass.id}`,
+      { method: 'PATCH', json: { capacity: next } },
+    );
+    setCapBusy(false);
+    if (!r.ok) { setMsg({ text: r.error!, ok: false }); return; }
+    const promoted = r.data?.promoted || [];
+    setViewingClass(prev => prev ? { ...prev, capacity: r.data?.capacity ?? next } : prev);
+    setMsg({
+      text: promoted.length
+        ? `Class size now ${next}. ${promoted.map(p => p.name).join(', ')} moved off the waitlist into the class.`
+        : `Class size now ${next}.`,
+      ok: true,
+    });
+    // The roster and the calendar both change when someone is promoted.
+    if (promoted.length) openClassModal({ ...viewingClass, capacity: next });
+    fetchAll();
   }
 
   async function openClassModal(cls: ClassSlot) {
@@ -2817,6 +2849,22 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                   <span style={{ fontSize:12, color: viewingClass.capacity-viewingClass.booked_count > 0 ? '#4ade80' : '#f87171' }}>
                     · {viewingClass.capacity-viewingClass.booked_count} spots free
                   </span>
+                  {!viewingClass.is_cancelled && (
+                    <span style={{ display:'inline-flex', alignItems:'center', gap:6, marginLeft:4 }}>
+                      <button onClick={() => changeCapacity(-1)}
+                        disabled={capBusy || viewingClass.capacity <= Math.max(1, viewingClass.booked_count)}
+                        title={viewingClass.capacity <= viewingClass.booked_count ? 'Members are already booked into every seat' : 'Remove a spot'}
+                        style={{ width:24, height:24, borderRadius:6, background:'transparent', border:`1px solid ${BORDER}`, color:CREAM, cursor:'pointer', fontSize:14, lineHeight:1, opacity: capBusy || viewingClass.capacity <= Math.max(1, viewingClass.booked_count) ? .35 : 1 }}>
+                        &minus;
+                      </button>
+                      <button onClick={() => changeCapacity(1)} disabled={capBusy}
+                        title="Add a spot. If anyone is waiting, it goes to them."
+                        style={{ width:24, height:24, borderRadius:6, background:'rgba(74,222,128,.12)', border:'1px solid rgba(74,222,128,.35)', color:'#4ade80', cursor:'pointer', fontSize:14, lineHeight:1, opacity: capBusy ? .5 : 1 }}>
+                        +
+                      </button>
+                      <span style={{ fontSize:11, color:MUTED }}>{capBusy ? 'saving…' : 'spots'}</span>
+                    </span>
+                  )}
                 </div>
               </div>
               <button onClick={() => setViewingClass(null)} style={{ color:MUTED, background:'none', border:'none', cursor:'pointer', fontSize:22, lineHeight:1, marginLeft:16, padding:0 }}>×</button>

@@ -2,9 +2,8 @@ export const runtime = 'edge';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
-import { pickPackForClass } from '@/lib/pack';
 import { verifySession } from '@/lib/auth';
-import { sendWaitlistPromoted } from '@/lib/whatsapp';
+import { promoteFromWaitlist } from '@/lib/waitlist';
 import { isPastNoticeWindow, NOTICE_HOURS } from '@/lib/date';
 
 export async function POST(req: NextRequest) {
@@ -64,60 +63,15 @@ export async function POST(req: NextRequest) {
     .update({ status: withinGrace ? 'rescheduled' : 'cancelled' })
     .eq('id', bookingId);
 
-  // Auto-promote the first ELIGIBLE person on the waitlist. Promotion used to
-  // book whoever was first with no checks at all, so an expired, deactivated or
-  // pack-exhausted member could be handed a free class. Walk the queue in order
-  // and skip anyone who could not have booked this class themselves.
-  const { data: queue } = await db
-    .from('waitlist')
-    .select('id, member_id, members(name, phone, is_active, is_frozen, plan_end, plan_start, plan_id)')
-    .eq('class_id', booking.class_id)
-    .order('created_at', { ascending: true });
-
-  type WaitMember = { name: string; phone: string; is_active: boolean; is_frozen: boolean | null; plan_end: string | null; plan_start: string | null; plan_id: string | null };
-  let next: { id: string; member_id: string; members: WaitMember; packId: string } | null = null;
-
-  for (const entry of queue || []) {
-    const raw = entry.members;
-    const m = (Array.isArray(raw) ? raw[0] : raw) as WaitMember | null;
-    if (!m || !m.is_active || m.is_frozen) continue;
-    // Promote only into a class this member could have booked themselves:
-    // some pack of theirs must cover the category and still hold a credit.
-    // Judged per pack — members.plan_end only names the primary one.
-    const { pack: payer } = await pickPackForClass(db, entry.member_id, cls?.category ?? null, cls?.class_date);
-    if (!payer) continue;
-
-    next = { id: entry.id, member_id: entry.member_id, members: m, packId: payer.id };
-    break;
-  }
-
-  if (next) {
-    /**
-     * pack_id was missing here. The loop above works out which pack should pay
-     * and then threw the answer away, so a promoted booking was charged to
-     * nothing -- usage counts bookings by pack_id, so every waitlist promotion
-     * was a free class. The same mistake as reschedule (733ec44). Nobody has
-     * been promoted in production yet, so no credits need repairing.
-     */
-    await db.from('bookings').upsert(
-      { member_id: next.member_id, class_id: booking.class_id, status: 'confirmed', pack_id: next.packId },
-      { onConflict: 'member_id,class_id' }
-    );
-    await db.from('waitlist').delete().eq('id', next.id);
-
-    // Notify promoted member via WhatsApp
-    if (cls) {
-      const member = next.members;
-      // Re-fetch class title since we only selected class_date/start_time above
-      const { data: fullCls } = await db.from('classes').select('title').eq('id', booking.class_id).single();
-      if (fullCls) {
-        sendWaitlistPromoted(member.phone, member.name, fullCls.title, cls.class_date, cls.start_time)
-          .catch((e) => console.error('Waitlist promotion WA failed:', e));
-      }
-    }
-  }
+  /**
+   * A place has come free, so it goes to the front of the waitlist rather than
+   * to whoever refreshes first. Shared with the admin capacity change, so both
+   * routes apply the same eligibility rules and both charge the promotion to a
+   * pack the member actually holds.
+   */
+  const promoted = await promoteFromWaitlist(db, booking.class_id, 1);
 
   // credit_returned lets the dashboard say so, rather than the member having
   // to work out whether their class came back.
-  return NextResponse.json({ success: true, promoted: !!next, credit_returned: withinGrace });
+  return NextResponse.json({ success: true, promoted: promoted.length > 0, credit_returned: withinGrace });
 }
