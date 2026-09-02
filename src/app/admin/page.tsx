@@ -188,7 +188,11 @@ export default function AdminPage() {
   const [loadingBookings, setLoadingBookings] = useState(false);
   const [newClass, setNewClass] = useState({ title:'', trainer_name:'', class_date:'', start_time:'', end_time:'', capacity:'20' });
   // Kept out of `newClass` so the existing text-input loop below stays untouched.
-  const [newClassCategory, setNewClassCategory] = useState('pole_regular');
+  // Empty, not 'pole_regular'. A silent default meant any class created
+  // without touching this dropdown became a Pole class, and the mistake only
+  // showed up later as a member's credits leaving the wrong bucket. The API
+  // rejects a class with no category, so this cannot be skipped by accident.
+  const [newClassCategory, setNewClassCategory] = useState('');
   const [newClassInstructor, setNewClassInstructor] = useState('');
   const [saving, setSaving] = useState(false);
   const [revenue, setRevenue] = useState<RevenueData | null>(null);
@@ -207,7 +211,7 @@ export default function AdminPage() {
   const [broadcastResult, setBroadcastResult] = useState<{ sent: number; failed: number } | null>(null);
   const [recurring, setRecurring] = useState({ title: '', trainer_name: '', days_of_week: [] as number[], start_time: '', end_time: '', capacity: '20', weeks: '4' });
   // Separate from `recurring` so the generic text-input loop below is untouched.
-  const [recurringCategory, setRecurringCategory] = useState('pole_regular');
+  const [recurringCategory, setRecurringCategory] = useState('');
   const [recurringSaving, setRecurringSaving] = useState(false);
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>([]);
   const [promoLoading, setPromoLoading] = useState(false);
@@ -219,7 +223,7 @@ export default function AdminPage() {
   const [revCategory, setRevCategory] = useState<string>('all');
   const [templates, setTemplates] = useState<ClassTemplate[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
-  const [newTemplate, setNewTemplate] = useState({ title: '', instructor_id: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
+  const [newTemplate, setNewTemplate] = useState({ title: '', instructor_id: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: '' });
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateDeleteBusy, setTemplateDeleteBusy] = useState<string | null>(null);
   const [genCycle, setGenCycle] = useState({ startDate: '', endDate: '' });
@@ -554,7 +558,7 @@ export default function AdminPage() {
     if (data.success) {
       setMsg({ text: 'Template created!', ok: true });
       setTemplates([]); loadTemplates();
-      setNewTemplate({ title: '', instructor_id: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: 'pole_regular' });
+      setNewTemplate({ title: '', instructor_id: '', day_of_week: '1', start_time: '', end_time: '', capacity: '8', category: '' });
     } else setMsg({ text: data.error || 'Failed', ok: false });
   }
 
@@ -1891,8 +1895,8 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                     <div>
                       {/* A member may hold several packs. Show each with what is
                           left on it — plan_name alone only names the primary. */}
-                      {(m.packs && m.packs.filter(p => p.is_live).length)
-                        ? m.packs.filter(p => p.is_live).map(p => (
+                      {(() => { const livePacks = (m.packs || []).filter(p => p.is_live); return livePacks.length
+                        ? livePacks.map(p => (
                             <div key={p.id} style={{ fontSize:12, color:ORANGE, fontWeight:500, lineHeight:1.45 }}>
                               {p.name}
                               <span style={{ color: p.remaining === 0 ? '#f87171' : MUTED, fontWeight:400 }}>
@@ -1910,14 +1914,26 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                                 </div>
                               )}
                               {p.is_frozen && <span style={{ color:'#fbbf24', fontWeight:400 }}>{' · frozen'}</span>}
+                              {/* Packs do not all expire together -- a Mobility
+                                  4-session runs 60 days where Pole runs 30 -- and
+                                  the single date in the next column is only the
+                                  furthest of them. Without this, a member holding
+                                  three packs looks like everything lasts until the
+                                  latest one, and gets told the wrong date. */}
+                              {livePacks.length > 1 && livePacks.some(q => q.expires_on !== p.expires_on) && (
+                                <span style={{ color:MUTED, fontWeight:400 }}>{' · till '}{fmtDate(p.expires_on)}</span>
+                              )}
                             </div>
                           ))
-                        : <div style={{ fontSize:12, color:ORANGE, fontWeight:500 }}>{m.plan_name}</div>}
+                        : <div style={{ fontSize:12, color:ORANGE, fontWeight:500 }}>{m.plan_name}</div>; })()}
                     </div>
                     <div style={{ fontSize:12, color:MUTED }}>{fmtDate(m.created_at)}</div>
                     <div>
                       <div style={{ fontSize:12, color: m.days_remaining<=7 ? '#f87171' : CREAM }}>{fmtDate(m.plan_end)}</div>
-                      <div style={{ fontSize:11, color: m.days_remaining<=7 ? '#f87171' : MUTED }}>{m.days_remaining}d left</div>
+                      <div style={{ fontSize:11, color: m.days_remaining<=7 ? '#f87171' : MUTED }}>
+                        {m.days_remaining}d left
+                        {(m.packs || []).filter(p => p.is_live).some(p => p.expires_on !== m.plan_end) && ' (latest pack)'}
+                      </div>
                     </div>
                     <span style={{ fontSize:11, padding:'3px 8px', borderRadius:999, background: m.is_active ? 'rgba(74,222,128,.1)' : 'rgba(248,113,113,.1)', color: m.is_active ? '#4ade80' : '#f87171', border:`1px solid ${m.is_active ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.25)'}` }}>
                       {m.is_active ? 'Active' : 'Inactive'}
@@ -2158,8 +2174,9 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
 
                 <div>
                   <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>Category *</label>
-                  <select value={newClassCategory} onChange={e => setNewClassCategory(e.target.value)}
+                  <select required value={newClassCategory} onChange={e => setNewClassCategory(e.target.value)}
                     style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }}>
+                    <option value="">Choose a discipline…</option>
                     <option value="pole_regular">Pole (Regular)</option>
                     <option value="pole_nimisha">Pole (Nimisha)</option>
                     <option value="strength">Strength</option>
@@ -2219,8 +2236,9 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 </div>
                 <div>
                   <label style={{ display:'block', fontSize:11, color:MUTED, marginBottom:6, textTransform:'uppercase', letterSpacing:'.1em' }}>Category *</label>
-                  <select value={recurringCategory} onChange={e => setRecurringCategory(e.target.value)}
+                  <select required value={recurringCategory} onChange={e => setRecurringCategory(e.target.value)}
                     style={{ width:'100%', background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'11px 14px', color:CREAM, fontSize:13 }}>
+                    <option value="">Choose a discipline…</option>
                     <option value="pole_regular">Pole (Regular)</option>
                     <option value="pole_nimisha">Pole (Nimisha)</option>
                     <option value="strength">Strength</option>
@@ -2446,8 +2464,9 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                   </div>
                   <div>
                     <label style={{ fontSize:11, color:MUTED, display:'block', marginBottom:4 }}>Category</label>
-                    <select value={newTemplate.category} onChange={e => setNewTemplate(p => ({ ...p, category: e.target.value }))}
+                    <select required value={newTemplate.category} onChange={e => setNewTemplate(p => ({ ...p, category: e.target.value }))}
                       style={{ width:'100%', background:'#111', border:`1px solid ${BORDER}`, borderRadius:6, padding:'8px 10px', color:CREAM, fontSize:13 }}>
+                      <option value="">Choose a discipline…</option>
                       <option value="pole_regular">Pole (Regular)</option>
                       <option value="pole_nimisha">Pole (Nimisha)</option>
                       <option value="strength">Strength</option>
