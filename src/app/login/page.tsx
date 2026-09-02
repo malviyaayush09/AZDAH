@@ -18,17 +18,58 @@ export default function LoginPage() {
     setError('');
     const clean = phone.replace(/\D/g, '');
     const full = clean.length === 10 ? `91${clean}` : clean;
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone: full, password }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (data.success) {
-      router.push(data.role === 'admin' ? '/admin' : data.role === 'instructor' ? '/instructor' : '/dashboard');
-    } else {
-      setError(data.error || 'Invalid phone or password');
+    /**
+     * Everything below used to be four bare awaits with no try/catch.
+     *
+     * If the request failed for any reason -- the connection dropping mid-flight,
+     * or the server answering with an HTML error page instead of JSON, which
+     * makes res.json() throw -- the promise rejected before setLoading(false)
+     * ever ran. The button then said "Logging in..." for as long as the member
+     * cared to wait, with no error and nothing to act on, and nothing was
+     * recorded server-side either. That is precisely what one member reported:
+     * "it's showing logging in for 3-4 mins".
+     *
+     * Now every path ends with the spinner cleared and a message that says what
+     * happened, so a member is never left staring at a dead button.
+     */
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: full, password }),
+        signal: controller.signal,
+      });
+
+      // A 500 or a gateway timeout answers with HTML, so this must not throw.
+      let data: { success?: boolean; role?: string; error?: string } | null = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (data?.success) {
+        router.push(data.role === 'admin' ? '/admin' : data.role === 'instructor' ? '/instructor' : '/dashboard');
+        return;
+      }
+
+      setError(
+        data?.error
+        || (res.status >= 500
+              ? 'Something went wrong at our end. Please try again in a moment — if it keeps happening, message AZDAH on WhatsApp.'
+              : 'Invalid phone or password'),
+      );
+    } catch (err) {
+      setError(
+        (err as Error)?.name === 'AbortError'
+          ? 'That took too long to respond. Check your connection and try again.'
+          : 'Could not reach the server. Check your internet connection and try again.',
+      );
+    } finally {
+      clearTimeout(timeout);
+      setLoading(false);
     }
   }
 

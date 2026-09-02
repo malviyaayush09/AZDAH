@@ -257,16 +257,35 @@ export default function DashboardPage() {
     if (!/[0-9]/.test(pwForm.newPw)) { setPwMsg({text:'Password must contain at least one number',ok:false}); return; }
     if (pwForm.newPw === pwForm.current) { setPwMsg({text:'Your new password must be different from your current one',ok:false}); return; }
     setPwBusy(true);
-    const res = await fetch('/api/member/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:pwForm.current,newPassword:pwForm.newPw})});
-    const data = await res.json();
-    setPwBusy(false);
-    if (data.success) {
-      setPwMsg({text:'Password changed successfully!',ok:true});
-      setPwForm({current:'',newPw:'',confirm:''});
-      // Clear must_change_password flag in local state so modal becomes dismissable
-      setMember(prev => prev ? { ...prev, must_change_password: false } : prev);
-      setTimeout(()=>setShowPwModal(false),1500);
-    } else setPwMsg({text:data.error||'Failed',ok:false});
+    // A failed request used to reject before setPwBusy(false) ran, leaving the
+    // button dead. On a first login this modal cannot be dismissed, so that
+    // trapped the member in a dialog with no way forward and nothing to read.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20_000);
+    try {
+      const res = await fetch('/api/member/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:pwForm.current,newPassword:pwForm.newPw}),signal:controller.signal});
+      let data: { success?: boolean; error?: string } | null = null;
+      try { data = await res.json(); } catch { data = null; }
+      if (data?.success) {
+        setPwMsg({text:'Password changed successfully!',ok:true});
+        setPwForm({current:'',newPw:'',confirm:''});
+        // Clear must_change_password flag in local state so modal becomes dismissable
+        setMember(prev => prev ? { ...prev, must_change_password: false } : prev);
+        setTimeout(()=>setShowPwModal(false),1500);
+      } else {
+        setPwMsg({text: data?.error
+          || (res.status >= 500
+                ? 'Something went wrong at our end. Please try again in a moment.'
+                : 'Could not change your password. Please try again.'), ok:false});
+      }
+    } catch (err) {
+      setPwMsg({text: (err as Error)?.name === 'AbortError'
+        ? 'That took too long to respond. Check your connection and try again.'
+        : 'Could not reach the server. Check your internet connection and try again.', ok:false});
+    } finally {
+      clearTimeout(timeout);
+      setPwBusy(false);
+    }
   }
 
   async function logout() { await fetch('/api/auth/logout',{method:'POST'}); router.push('/login'); }
