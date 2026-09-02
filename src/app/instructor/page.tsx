@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
+import { Toast, type ToastMsg } from '@/components/Toast';
 import { useRouter } from 'next/navigation';
 
 const DARK = '#0D0B08';
@@ -37,16 +39,19 @@ export default function InstructorPage() {
   const [attBusy, setAttBusy] = useState<string | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [noteBusy, setNoteBusy] = useState<string | null>(null);
+  // Attendance and notes used to fail silently: the request was fired,
+  // nothing checked the result, and the trainer saw a saved-looking row.
+  const [msg, setMsg] = useState<ToastMsg>(null);
 
   useEffect(() => {
     (async () => {
-      const res = await fetch('/api/instructor/dashboard');
-      if (res.status === 401 || res.status === 403) { router.push('/login'); return; }
-      const data = await res.json();
-      setName(data.name || 'Instructor');
-      setClasses(data.classes || []);
-      setStats(data.stats || null);
+      const r = await api<{ name?: string; classes?: ClassRow[]; stats?: { upcoming_classes: number; total_upcoming_bookings: number } }>('/api/instructor/dashboard');
+      if (r.status === 401 || r.status === 403) { router.push('/login'); return; }
+      setName(r.data?.name || 'Instructor');
+      setClasses(r.data?.classes || []);
+      setStats(r.data?.stats || null);
       setLoading(false);
+      if (!r.ok) setMsg({ text: r.error!, ok: false });
     })();
   }, [router]);
 
@@ -55,23 +60,22 @@ export default function InstructorPage() {
     setExpanded(classId);
     if (!rosters[classId]) {
       setRosterLoading(classId);
-      const res = await fetch(`/api/instructor/classes/${classId}`);
-      const data = await res.json();
-      const roster: RosterEntry[] = data.roster || [];
+      const res = await api<{ roster?: RosterEntry[] }>(`/api/instructor/classes/${classId}`);
+      const roster: RosterEntry[] = res.data?.roster || [];
       setRosters((prev) => ({ ...prev, [classId]: roster }));
       setNoteDrafts((prev) => ({ ...prev, ...Object.fromEntries(roster.map((r) => [r.member_id, r.note])) }));
       setRosterLoading(null);
+      if (!res.ok) setMsg({ text: res.error!, ok: false });
     }
   }
 
   async function markAttendance(classId: string, bookingId: string, attended: boolean) {
     setAttBusy(bookingId);
-    const res = await fetch(`/api/instructor/classes/${classId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookingId, attended }),
-    });
+    const res = await api(`/api/instructor/classes/${classId}`, { method: 'PATCH', json: { bookingId, attended } });
     if (res.ok) {
       setRosters((prev) => ({ ...prev, [classId]: (prev[classId] || []).map((r) => (r.id === bookingId ? { ...r, attended } : r)) }));
+    } else {
+      setMsg({ text: res.error!, ok: false });
     }
     setAttBusy(null);
   }
@@ -79,11 +83,9 @@ export default function InstructorPage() {
   async function saveNote(memberId: string) {
     setNoteBusy(memberId);
     const note = noteDrafts[memberId] ?? '';
-    await fetch('/api/instructor/notes', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ memberId, note }),
-    });
+    const res = await api('/api/instructor/notes', { json: { memberId, note } });
     setNoteBusy(null);
+    setMsg(res.ok ? { text: 'Note saved.', ok: true } : { text: res.error!, ok: false });
   }
 
   function messageClass(classId: string, title: string) {
@@ -95,7 +97,8 @@ export default function InstructorPage() {
   }
 
   async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    // Leave regardless -- a failed request must not hold the trainer here.
+    await api('/api/auth/logout', { method: 'POST' });
     router.push('/login');
   }
 
@@ -168,6 +171,7 @@ export default function InstructorPage() {
 
   return (
     <main style={{ minHeight: '100vh', background: DARK, color: CREAM, fontFamily: 'system-ui, sans-serif' }}>
+      <Toast msg={msg} onClose={() => setMsg(null)} />
       <style dangerouslySetInnerHTML={{ __html: '*{box-sizing:border-box;margin:0;padding:0}' }} />
 
       <nav style={{ borderBottom: `1px solid ${BORDER}`, padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

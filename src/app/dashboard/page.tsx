@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Settings, CalendarDays, Info, Eye, EyeOff, User } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { isPastNoticeWindow as pastNotice, NOTICE_HOURS } from '@/lib/date';
+import { api } from '@/lib/api';
 
 type MemberInfo = {
   id: string; name: string; phone: string;
@@ -138,14 +139,28 @@ export default function DashboardPage() {
   }, [stats]);
 
   async function fetchAll() {
-    const [mRes, cRes, sRes] = await Promise.all([
-      fetch('/api/member/me'),
-      fetch('/api/member/classes'),
-      fetch('/api/member/stats'),
+    /**
+     * Three bare fetches inside Promise.all, then three bare .json() calls.
+     * One failure rejected the whole thing before setLoading(false) ran, so the
+     * member sat on "Loading..." indefinitely with nothing explaining why.
+     */
+    const [m, c, st] = await Promise.all([
+      api<{ member: MemberInfo }>('/api/member/me'),
+      api<{ upcoming: ClassSlot[]; myBookings: ClassSlot[] }>('/api/member/classes'),
+      api<MemberStats>('/api/member/stats'),
     ]);
-    if (mRes.status === 401) { router.push('/login'); return; }
-    const [mData, cData, sData] = await Promise.all([mRes.json(), cRes.json(), sRes.json()]);
-    setMember(mData.member);
+    if (m.status === 401) { router.push('/login'); return; }
+    if (!m.ok && m.status === 0) {
+      // Never reached the server. Say so and stop, rather than rendering an
+      // empty dashboard that reads as "the studio has no classes".
+      setLoading(false);
+      setMsg({ text: m.error!, ok: false });
+      return;
+    }
+    const mData = m.data ?? ({} as { member?: MemberInfo });
+    const cData = c.data ?? ({} as { upcoming?: ClassSlot[]; myBookings?: ClassSlot[] });
+    const sData = st.data;
+    setMember(mData.member ?? null);
     setClasses(cData.upcoming || []);
     // Land on the first week that actually has classes. Opening on the current
     // week shows "No classes this week" whenever today is late in the week and
@@ -160,19 +175,21 @@ export default function DashboardPage() {
       }
     }
     setMyBookings(cData.myBookings || []);
-    if (sData.total_attended !== undefined) setStats(sData);
+    if (sData && sData.total_attended !== undefined) setStats(sData);
     setLoading(false);
+    if (!c.ok) setMsg({ text: c.error!, ok: false });
     if (mData.member?.must_change_password) setShowPwModal(true);
     if (mData.member) setProfileForm({ name: mData.member.name, email: '' });
     // Fetch waitlist positions for on-waitlist classes
     const wlClasses = (cData.upcoming || []).filter((c: ClassSlot) => c.on_waitlist);
     if (wlClasses.length > 0) {
       const positions = await Promise.all(
-        wlClasses.map((c: ClassSlot) =>
-          fetch(`/api/member/waitlist-position?classId=${c.id}`)
-            .then(r => r.json())
-            .then(d => d.position ? { classId: c.id, position: d.position, total: d.total } : null)
-        )
+        wlClasses.map(async (w: ClassSlot) => {
+          const r = await api<{ position?: number; total?: number }>(`/api/member/waitlist-position?classId=${w.id}`);
+          return r.data && r.data.position
+            ? { classId: w.id, position: r.data.position, total: r.data.total }
+            : null;
+        })
       );
       setWaitlistPos(positions.filter(Boolean) as WaitlistPos[]);
     }
@@ -194,52 +211,49 @@ export default function DashboardPage() {
   async function loadHistory() {
     if (history.length) return;
     setHistLoading(true);
-    const res = await fetch('/api/member/history');
-    const data = await res.json();
-    setHistory(data.history || []);
+    const r = await api<{ history: HistoryItem[] }>('/api/member/history');
+    setHistory(r.data?.history || []);
     setHistLoading(false);
+    if (!r.ok) setMsg({ text: r.error!, ok: false });
   }
 
   async function bookClass(classId: string) {
     setMsg(null); setBusyId(classId);
-    const res = await fetch('/api/booking/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({classId})});
-    const data = await res.json();
+    const r = await api('/api/booking/create', { json: { classId } });
     setBusyId(null);
-    setMsg(data.success?{text:'Class booked!',ok:true}:{text:data.error||'Booking failed',ok:false});
-    if (data.success) fetchAll();
+    setMsg(r.ok ? { text: 'Class booked!', ok: true } : { text: r.error!, ok: false });
+    if (r.ok) fetchAll();
   }
 
   async function cancelBooking(bookingId: string) {
     if (!confirm('Cancel this booking? The spot will be freed for others.')) return;
     setMsg(null); setBusyId(bookingId);
-    const res = await fetch('/api/booking/cancel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bookingId})});
-    const data = await res.json();
+    const r = await api('/api/booking/cancel', { json: { bookingId } });
     setBusyId(null);
-    setMsg(data.success?{text:'Booking cancelled.',ok:true}:{text:data.error||'Failed',ok:false});
-    if (data.success) fetchAll();
+    setMsg(r.ok ? { text: 'Booking cancelled.', ok: true } : { text: r.error!, ok: false });
+    if (r.ok) fetchAll();
   }
 
   async function rescheduleClass(oldId: string, newId: string) {
     setMsg(null); setBusyId(newId);
-    const res = await fetch('/api/booking/reschedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({oldBookingId:oldId,newClassId:newId})});
-    const data = await res.json();
+    const r = await api('/api/booking/reschedule', { json: { oldBookingId: oldId, newClassId: newId } });
     setBusyId(null);
-    if (data.success) { setMsg({text:'Rescheduled!',ok:true}); setRescheduleMode(null); setTab('my-bookings'); fetchAll(); }
-    else setMsg({text:data.error||'Failed',ok:false});
+    if (r.ok) { setMsg({text:'Rescheduled!',ok:true}); setRescheduleMode(null); setTab('my-bookings'); fetchAll(); }
+    else setMsg({ text: r.error!, ok: false });
   }
 
   async function toggleWaitlist(cls: ClassSlot) {
     setMsg(null); setBusyId(cls.id);
     if (cls.on_waitlist) {
-      const res = await fetch('/api/booking/waitlist',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({classId:cls.id})});
-      const data = await res.json();
+      const r = await api('/api/booking/waitlist', { method: 'DELETE', json: { classId: cls.id } });
       setBusyId(null);
-      setMsg(data.success?{text:'Removed from waitlist.',ok:true}:{text:data.error||'Failed',ok:false});
+      setMsg(r.ok ? { text: 'Removed from waitlist.', ok: true } : { text: r.error!, ok: false });
     } else {
-      const res = await fetch('/api/booking/waitlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({classId:cls.id})});
-      const data = await res.json();
+      const r = await api('/api/booking/waitlist', { json: { classId: cls.id } });
       setBusyId(null);
-      setMsg(data.success?{text:`Added to waitlist! You'll be auto-booked if a spot opens.`,ok:true}:{text:data.error||'Failed',ok:false});
+      setMsg(r.ok
+        ? { text: `Added to waitlist! You'll be auto-booked if a spot opens.`, ok: true }
+        : { text: r.error!, ok: false });
     }
     if (busyId) fetchAll();
     fetchAll();
@@ -288,17 +302,18 @@ export default function DashboardPage() {
     }
   }
 
-  async function logout() { await fetch('/api/auth/logout',{method:'POST'}); router.push('/login'); }
+  // Leave for /login even if the request fails. A member who taps Log out
+  // should never be held on the dashboard because the network blipped.
+  async function logout() { await api('/api/auth/logout', { method: 'POST' }); router.push('/login'); }
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault(); setProfileMsg(null); setProfileBusy(true);
-    const res = await fetch('/api/member/profile',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(profileForm)});
-    const data = await res.json();
+    const r = await api('/api/member/profile', { method: 'PATCH', json: profileForm });
     setProfileBusy(false);
-    if (data.success) {
+    if (r.ok) {
       setProfileMsg({text:'Profile updated!',ok:true});
       setMember(prev => prev ? {...prev, name: profileForm.name || prev.name} : prev);
-    } else setProfileMsg({text:data.error||'Update failed',ok:false});
+    } else setProfileMsg({ text: r.error!, ok: false });
   }
 
   const trainers = ['all',...Array.from(new Set(classes.map(c=>c.trainer_name).filter(Boolean) as string[]))];

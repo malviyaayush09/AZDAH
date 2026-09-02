@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase, type MembershipPlan } from '@/lib/supabase';
 import Link from 'next/link';
 import { IgChip, IgIcon, INSTAGRAM, INSTAGRAM_HANDLE } from '@/components/Instagram';
+import { api } from '@/lib/api';
 import Image from 'next/image';
 import { Camera, ChevronDown } from 'lucide-react';
 
@@ -259,16 +260,14 @@ export default function HomePage() {
   async function checkPromo() {
     if (!form.promoCode.trim() || !selectedPlan) return;
     setPromoChecking(true); setPromoStatus(null);
-    const res = await fetch('/api/promo/validate', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: form.promoCode, planId: selectedPlan.id }),
+    const r = await api<{ valid?: boolean; discount_percent?: number }>('/api/promo/validate', {
+      json: { code: form.promoCode, planId: selectedPlan.id },
     });
-    const data = await res.json();
     setPromoChecking(false);
-    if (data.valid) {
-      setPromoStatus({ valid: true, discount: data.discount_percent, msg: `${data.discount_percent}% off applied!` });
+    if (r.data?.valid) {
+      setPromoStatus({ valid: true, discount: r.data.discount_percent!, msg: `${r.data.discount_percent}% off applied!` });
     } else {
-      setPromoStatus({ valid: false, discount: 0, msg: data.error || 'Invalid code' });
+      setPromoStatus({ valid: false, discount: 0, msg: r.error || 'Invalid code' });
     }
   }
 
@@ -308,18 +307,16 @@ export default function HomePage() {
     const fullPhone = `91${rawPhone}`;
 
     try {
-      const orderRes = await fetch('/api/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId: selectedPlan.id, phone: fullPhone, name: trimmedName, email: trimmedEmail, promoCode: form.promoCode || undefined }),
+      const orderRes = await api<{ orderId: string; amount: number }>('/api/create-order', {
+        json: { planId: selectedPlan.id, phone: fullPhone, name: trimmedName, email: trimmedEmail, promoCode: form.promoCode || undefined },
       });
-      const order = await orderRes.json();
       if (orderRes.status === 409) {
         setCheckoutError('This number already has an active membership. Please login instead.');
         setPayLoading(false);
         return;
       }
-      if (!orderRes.ok) throw new Error(order.error || 'Could not create order');
+      if (!orderRes.ok) throw new Error(orderRes.error!);
+      const order = orderRes.data!;
 
       await loadScript('https://checkout.razorpay.com/v1/checkout.js');
 
@@ -335,10 +332,22 @@ export default function HomePage() {
         prefill: { contact: rawPhone, name: trimmedName, email: trimmedEmail },
         theme: { color: ORANGE },
         handler: async (response) => {
-          const verifyRes = await fetch('/api/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          /**
+           * Razorpay calls this once the money has been taken, and it runs
+           * after rzp.open() returns -- so the try/catch below does not cover
+           * it. A bare fetch here meant that a member who had just paid could
+           * be left watching a dead button with nothing on screen, which is
+           * exactly how someone ends up paying a second time.
+           *
+           * The payment itself is never lost: the Razorpay webhook provisions
+           * the membership server-side regardless of what this page manages to
+           * do. So when the request cannot be reached, say that plainly.
+           */
+          const v = await api<{
+            success?: boolean; password?: string; phone?: string; name?: string;
+            plan_end?: string; is_new_member?: boolean;
+          }>('/api/verify-payment', {
+            json: {
               orderId: response.razorpay_order_id,
               paymentId: response.razorpay_payment_id,
               signature: response.razorpay_signature,
@@ -346,20 +355,24 @@ export default function HomePage() {
               name: form.name,
               phone: fullPhone,
               email: form.email,
-            }),
-          });
-          const result = await verifyRes.json();
-          if (result.success) {
+            },
+          }, 45_000);
+          const result = v.data ?? {};
+          if (v.ok) {
             // A returning member keeps the login they already have — there is
             // no new password to show them.
             if (result.password) {
-              setMemberCreds({ phone: result.phone, name: result.name, password: result.password });
+              // Fall back to what was just typed rather than an empty string:
+              // these are the credentials shown on the success screen.
+              setMemberCreds({ phone: result.phone ?? fullPhone, name: result.name ?? trimmedName, password: result.password });
             } else {
               setMemberCreds(null);
             }
             setReturningMember(result.is_new_member === false);
             setReceipt({ planName: selectedPlan.name, amount: order.amount, planEnd: result.plan_end || '' });
             setCheckoutDone(true);
+          } else if (v.status === 0) {
+            setCheckoutError('Your payment went through, but we could not confirm it on this page. Your membership is safe and will be activated automatically — please message AZDAH on WhatsApp and we will send your login.');
           } else {
             setCheckoutError('Payment verification failed. Contact us on WhatsApp.');
           }

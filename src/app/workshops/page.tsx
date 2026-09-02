@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { IgChip } from '@/components/Instagram';
+import { api } from '@/lib/api';
 
 // Razorpay checkout is loaded from their CDN at runtime. We don't augment the
 // global Window here (the landing page already does, with a different options
@@ -140,26 +141,21 @@ export default function WorkshopsPage() {
     setBusy(true);
     try {
       if (selected.is_free) {
-        const res = await fetch('/api/workshops/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ workshopId: selected.id, name, phone: fullPhone, email: email || undefined }),
+        const res = await api('/api/workshops/register', {
+          json: { workshopId: selected.id, name, phone: fullPhone, email: email || undefined },
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Registration failed');
+        if (!res.ok) throw new Error(res.error!);
         setDone(true);
         setBusy(false);
         return;
       }
 
       // Paid workshop → Razorpay
-      const orderRes = await fetch('/api/workshops/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workshopId: selected.id, name, phone: fullPhone, email: email || undefined }),
+      const orderRes = await api<{ orderId: string; amount: number; workshopTitle?: string }>('/api/workshops/create-order', {
+        json: { workshopId: selected.id, name, phone: fullPhone, email: email || undefined },
       });
-      const order = await orderRes.json();
-      if (!orderRes.ok) throw new Error(order.error || 'Could not start payment');
+      if (!orderRes.ok) throw new Error(orderRes.error!);
+      const order = orderRes.data!;
 
       await loadScript('https://checkout.razorpay.com/v1/checkout.js');
       const RazorpayCtor = (window as unknown as { Razorpay: new (o: RazorpayOptions) => RazorpayInstance }).Razorpay;
@@ -173,20 +169,27 @@ export default function WorkshopsPage() {
         prefill: { contact: rawPhone, name, email: email || undefined },
         theme: { color: ORANGE },
         handler: async (response) => {
-          const verifyRes = await fetch('/api/workshops/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          /**
+           * Razorpay calls this once the money has been taken, and it runs
+           * after rzp.open() returns -- so the try/catch above does not cover
+           * it. A bare fetch here meant that if verification could not be
+           * reached, someone who had just paid saw the button sit there with
+           * no message at all. Allow a longer window than usual, and if the
+           * request never lands, say plainly that the payment is safe.
+           */
+          const v = await api<{ success?: boolean; error?: string }>('/api/workshops/verify-payment', {
+            json: {
               orderId: response.razorpay_order_id,
               paymentId: response.razorpay_payment_id,
               signature: response.razorpay_signature,
-            }),
-          });
-          const result = await verifyRes.json();
-          if (result.success) {
+            },
+          }, 45_000);
+          if (v.ok) {
             setDone(true);
-          } else if (result.error === 'full_after_payment') {
+          } else if (v.data?.error === 'full_after_payment') {
             setError('This workshop just filled up. Your payment will be refunded — please reach out on WhatsApp.');
+          } else if (v.status === 0) {
+            setError('Your payment went through, but we could not confirm it here. Your place is safe — please message us on WhatsApp and we will confirm it.');
           } else {
             setError('Payment verification failed. Please contact us on WhatsApp.');
           }
