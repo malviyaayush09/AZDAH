@@ -1076,6 +1076,15 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
              unreadable, so each member becomes a stacked block. */
           .mhead{display:none !important}
           .mrow{grid-template-columns:1fr !important;gap:7px;padding:14px 14px !important}
+
+          /* Thumb targets. Measured on a real 375px viewport against
+             production, not guessed: twenty-nine controls came back under 40px
+             tall, most at 34 -- every navigation tab, the calendar arrows, and
+             the Mark Present and WA buttons pressed for each member of each
+             class. Apple asks for 44. The studio runs this from an iPhone. */
+          .anav{min-height:44px}
+          .acontent button{min-height:44px}
+          .modal-bg button{min-height:44px}
         }
         @media(max-width:420px){
           .dstrip{gap:3px}
