@@ -1020,6 +1020,17 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
     <main style={{ minHeight:'100vh', background:DARK, fontFamily:'system-ui,sans-serif' }}>
       <style dangerouslySetInnerHTML={{ __html: `
         *{box-sizing:border-box}
+        /* Every inline multi-column grid collapses on a phone.
+           React writes these as style attributes, so no class can reach them --
+           and fifteen of them carry no className at all, including a six-column
+           member table and a four-column audit log. On the iPhone the studio
+           actually works from, those squeeze into 375px and become unreadable.
+           This rule is deliberately FIRST: the specific overrides further down
+           (.kpi-row keeping two columns, .wk7 scrolling sideways, .mrow) come
+           later at equal specificity and therefore still win. */
+        @media(max-width:760px){
+          .acontent [style*="grid-template-columns"]{ grid-template-columns:1fr !important }
+        }
         @media(max-width:900px){ .dash-charts{grid-template-columns:1fr !important} }
         .asidebar{width:214px;flex-shrink:0;background:#131009;border-right:1px solid ${BORDER};
           display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
