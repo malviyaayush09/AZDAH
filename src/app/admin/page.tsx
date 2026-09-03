@@ -2841,7 +2841,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                   )}
                 </div>
                 {/* Capacity bar */}
-                <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:8 }}>
+                <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                   <div style={{ width:120, height:5, background:'rgba(255,255,255,.05)', borderRadius:999, overflow:'hidden' }}>
                     <div style={{ height:'100%', width:`${(viewingClass.booked_count/viewingClass.capacity)*100}%`, background: viewingClass.booked_count >= viewingClass.capacity ? '#f87171' : ORANGE, borderRadius:999 }} />
                   </div>
@@ -2849,23 +2849,34 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                   <span style={{ fontSize:12, color: viewingClass.capacity-viewingClass.booked_count > 0 ? '#4ade80' : '#f87171' }}>
                     · {viewingClass.capacity-viewingClass.booked_count} spots free
                   </span>
-                  {!viewingClass.is_cancelled && (
-                    <span style={{ display:'inline-flex', alignItems:'center', gap:6, marginLeft:4 }}>
-                      <button onClick={() => changeCapacity(-1)}
-                        disabled={capBusy || viewingClass.capacity <= Math.max(1, viewingClass.booked_count)}
-                        title={viewingClass.capacity <= viewingClass.booked_count ? 'Members are already booked into every seat' : 'Remove a spot'}
-                        style={{ width:24, height:24, borderRadius:6, background:'transparent', border:`1px solid ${BORDER}`, color:CREAM, cursor:'pointer', fontSize:14, lineHeight:1, opacity: capBusy || viewingClass.capacity <= Math.max(1, viewingClass.booked_count) ? .35 : 1 }}>
-                        &minus;
-                      </button>
-                      <button onClick={() => changeCapacity(1)} disabled={capBusy}
-                        title="Add a spot. If anyone is waiting, it goes to them."
-                        style={{ width:24, height:24, borderRadius:6, background:'rgba(74,222,128,.12)', border:'1px solid rgba(74,222,128,.35)', color:'#4ade80', cursor:'pointer', fontSize:14, lineHeight:1, opacity: capBusy ? .5 : 1 }}>
-                        +
-                      </button>
-                      <span style={{ fontSize:11, color:MUTED }}>{capBusy ? 'saving…' : 'spots'}</span>
-                    </span>
-                  )}
                 </div>
+
+                {/* Class size, on its own line and spelled out. It sat inline at
+                    the end of the capacity row, which on a phone had nowhere to
+                    wrap to -- the studio could not see it at all. And a bare +
+                    beside the word "spots" did not read as "add a spot" even
+                    where it fitted: the first question asked was "how do I add a
+                    slot to an existing class". */}
+                {!viewingClass.is_cancelled && (
+                  <div style={{ marginTop:10, display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                    <span style={{ fontSize:11, color:MUTED, letterSpacing:'.06em', textTransform:'uppercase' }}>Class size</span>
+                    <button onClick={() => changeCapacity(1)} disabled={capBusy}
+                      title="Adds one seat. If anyone is on the waitlist, it goes to them."
+                      style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:7, background:'rgba(74,222,128,.12)', border:'1px solid rgba(74,222,128,.4)', color:'#4ade80', cursor: capBusy ? 'default' : 'pointer', fontSize:12.5, fontWeight:600, opacity: capBusy ? .5 : 1 }}>
+                      + Add spot
+                    </button>
+                    <button onClick={() => changeCapacity(-1)}
+                      disabled={capBusy || viewingClass.capacity <= Math.max(1, viewingClass.booked_count)}
+                      title={viewingClass.capacity <= viewingClass.booked_count ? 'Every seat is already booked, so the class cannot be made smaller' : 'Removes one seat'}
+                      style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'6px 12px', borderRadius:7, background:'transparent', border:`1px solid ${BORDER}`, color:CREAM, cursor: (capBusy || viewingClass.capacity <= Math.max(1, viewingClass.booked_count)) ? 'default' : 'pointer', fontSize:12.5, fontWeight:600, opacity: (capBusy || viewingClass.capacity <= Math.max(1, viewingClass.booked_count)) ? .35 : 1 }}>
+                      &minus; Remove spot
+                    </button>
+                    {capBusy && <span style={{ fontSize:11.5, color:MUTED }}>saving…</span>}
+                    {!capBusy && viewingClass.booked_count >= viewingClass.capacity && (
+                      <span style={{ fontSize:11.5, color:'#fbbf24' }}>Class is full — adding a spot gives it to the waitlist</span>
+                    )}
+                  </div>
+                )}
               </div>
               <button onClick={() => setViewingClass(null)} style={{ color:MUTED, background:'none', border:'none', cursor:'pointer', fontSize:22, lineHeight:1, marginLeft:16, padding:0 }}>×</button>
             </div>
