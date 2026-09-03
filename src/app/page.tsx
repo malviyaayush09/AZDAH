@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { supabase, type MembershipPlan } from '@/lib/supabase';
 import Link from 'next/link';
 import { IgChip, IgIcon, INSTAGRAM, INSTAGRAM_HANDLE } from '@/components/Instagram';
+import { studioSchema } from '@/lib/studio';
 import { api } from '@/lib/api';
 import Image from 'next/image';
 import { Camera, ChevronDown } from 'lucide-react';
@@ -893,36 +894,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Structured data - helps Google associate AZDAH with the new address */}
+      {/* Structured data. Lives in src/lib/studio.ts so the address, the
+          coordinates and the Instagram handle have exactly one home. */}
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify({
-          '@context': 'https://schema.org',
-          '@type': 'SportsActivityLocation',
-          name: 'AZDAH',
-          description: 'Women and queer-first pole studio in Bengaluru.',
-          url: 'https://www.azdah.in',
-          telephone: '+91-85880-56122',
-          // No email here on purpose. The inbox is not monitored, and the
-          // studio takes contact on Instagram first, then WhatsApp; listing an
-          // address in the structured data invites Google to surface it.
-          // Tells Google the Instagram account is this business, so the profile
-          // can surface alongside the listing.
-          sameAs: [INSTAGRAM],
-          hasMap: MAPS_LINK,
-          address: {
-            '@type': 'PostalAddress',
-            streetAddress: 'AU Small Finance Bank (3rd floor), 10/3, Jeevan Bima Nagar Main Rd, LIC Colony, Sector 11, New Thippasandra',
-            addressLocality: 'Bengaluru',
-            addressRegion: 'Karnataka',
-            postalCode: '560075',
-            addressCountry: 'IN',
-          },
-          openingHoursSpecification: [
-            { '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'], opens: '06:00', closes: '21:00' },
-            { '@type': 'OpeningHoursSpecification', dayOfWeek: 'Sunday', opens: '07:00', closes: '14:00' },
-          ],
-        }) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(studioSchema()) }}
       />
 
       {/* ── CONTACT ── */}

@@ -1,9 +1,13 @@
 'use client';
 
 // One home for the studio's Instagram, so the handle is not spelled out in
-// four separate files.
-export const INSTAGRAM = 'https://instagram.com/polewithazdah';
-export const INSTAGRAM_HANDLE = '@polewithazdah';
+// four separate files. The values themselves live in src/lib/studio.ts with the
+// rest of the studio's facts; re-exported here so the existing import sites
+// keep working.
+import { INSTAGRAM_URL, INSTAGRAM_AT } from '@/lib/studio';
+
+export const INSTAGRAM = INSTAGRAM_URL;
+export const INSTAGRAM_HANDLE = INSTAGRAM_AT;
 
 // Instagram's glyph, inline: one more network request for a logo is not worth it.
 export function IgIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {

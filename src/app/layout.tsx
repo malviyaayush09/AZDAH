@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Hanken_Grotesk, Bodoni_Moda } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/next';
+import { SITE_URL, OG_IMAGE } from '@/lib/studio';
 import './globals.css';
 
 // Body / UI typeface — clean grotesque (replaces Inter)
@@ -21,9 +22,47 @@ const bodoniModa = Bodoni_Moda({
   adjustFontFallback: false,
 });
 
+const TITLE = 'AZDAH · Pole Dance Studio in Bangalore';
+const DESCRIPTION =
+  'A women & queer-first pole dance studio in Bangalore — pole art, pole fitness, exotic, flexibility, strength & mindfulness. Classes in New Thippasandra, minutes from Indiranagar and Domlur.';
+
+/**
+ * metadataBase is what makes the relative '/og.jpg' below resolve to an
+ * absolute URL. Without it Next emits a relative og:image, which every scraper
+ * that matters (WhatsApp, Instagram, Slack, X) silently drops -- which is why
+ * sharing azdah.in produced a bare grey link with no picture.
+ */
 export const metadata: Metadata = {
-  title: 'AZDAH · Pole Studio, Bangalore',
-  description: 'A women & queer-first pole studio in Bangalore — pole art, fitness, exotic, flexibility & mindfulness. Find your power.',
+  metadataBase: new URL(SITE_URL),
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: 'AZDAH',
+  alternates: { canonical: '/' },
+  keywords: [
+    'pole dance Bangalore',
+    'pole dance classes Bangalore',
+    'pole fitness Bangalore',
+    'pole dance studio Indiranagar',
+    'pole dance New Thippasandra',
+    'aerial and pole art Bengaluru',
+    'women only fitness studio Bangalore',
+  ],
+  openGraph: {
+    type: 'website',
+    siteName: 'AZDAH',
+    title: TITLE,
+    description: DESCRIPTION,
+    url: SITE_URL,
+    locale: 'en_IN',
+    images: [OG_IMAGE],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [OG_IMAGE.url],
+  },
+  robots: { index: true, follow: true },
   icons: { icon: '/icon.svg' },
 };
 
