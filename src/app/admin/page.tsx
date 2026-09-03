@@ -45,6 +45,11 @@ type ClassBooking = {
   id: string; created_at: string; attended: boolean | null;
   member: { id: string; name: string; phone: string; plan_end: string } | null;
 };
+type ClassWaiting = {
+  id: string; position: number; created_at: string;
+  member: { id: string; name: string; phone: string } | null;
+  canBePromoted: boolean; reason: string | null;
+};
 
 type RevenueData = {
   total_paise: number; total_members: number;
@@ -167,6 +172,7 @@ export default function AdminPage() {
   const [viewingClass, setViewingClass] = useState<ClassSlot | null>(null);
   const [classBookings, setClassBookings] = useState<ClassBooking[]>([]);
   const [capBusy, setCapBusy] = useState(false);
+  const [classWaiting, setClassWaiting] = useState<ClassWaiting[]>([]);
   // Every confirmed booking in the visible week. Loaded up front so the
   // calendar can show who is in each class, and be filtered by instructor,
   // member or plan, without opening one class at a time.
@@ -417,10 +423,10 @@ export default function AdminPage() {
   }
 
   async function openClassModal(cls: ClassSlot) {
-    setViewingClass(cls); setClassBookings([]); setLoadingBookings(true);
-    const res = await api(`/api/admin/classes/${cls.id}/bookings`);
-    const data = res.data ?? {};
-    setClassBookings(data.bookings || []);
+    setViewingClass(cls); setClassBookings([]); setClassWaiting([]); setLoadingBookings(true);
+    const res = await api<{ bookings?: ClassBooking[]; waitlist?: ClassWaiting[] }>(`/api/admin/classes/${cls.id}/bookings`);
+    setClassBookings(res.data?.bookings || []);
+    setClassWaiting(res.data?.waitlist || []);
     setLoadingBookings(false);
   }
 
@@ -2873,7 +2879,13 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                     </button>
                     {capBusy && <span style={{ fontSize:11.5, color:MUTED }}>saving…</span>}
                     {!capBusy && viewingClass.booked_count >= viewingClass.capacity && (
-                      <span style={{ fontSize:11.5, color:'#fbbf24' }}>Class is full — adding a spot gives it to the waitlist</span>
+                      <span style={{ fontSize:11.5, color:'#fbbf24' }}>
+                        {classWaiting.some(w => w.canBePromoted)
+                          ? `Class is full — a spot goes straight to ${classWaiting.find(w => w.canBePromoted)!.member?.name ?? 'the waitlist'}`
+                          : classWaiting.length
+                            ? 'Class is full. Nobody on the waitlist can take a spot right now — see below for why'
+                            : 'Class is full, and nobody is waiting'}
+                      </span>
                     )}
                   </div>
                 )}
@@ -2921,6 +2933,40 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                       </div>
                     ))}
                   </div>
+
+                  {/* Who is waiting, and whether a new spot could actually go to
+                      them. Without this, "Add spot" on a full class is a guess:
+                      somebody appears, or nothing happens, and the studio cannot
+                      tell which to expect. A member who has spent every credit
+                      stays on the waitlist for good, correctly, but invisibly. */}
+                  {classWaiting.length > 0 && (
+                    <>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', margin:'18px 0 8px' }}>
+                        <span style={{ fontSize:11, color:MUTED, textTransform:'uppercase', letterSpacing:'.1em' }}>Waiting — {classWaiting.length}</span>
+                        <span style={{ fontSize:11, color: classWaiting.some(w=>w.canBePromoted) ? '#4ade80' : '#fbbf24' }}>
+                          {classWaiting.filter(w=>w.canBePromoted).length} can take a spot
+                        </span>
+                      </div>
+                      <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
+                        {classWaiting.map(w => (
+                          <div key={w.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, padding:'10px 12px', background:FAINT, borderRadius:8, border:`1px solid ${w.canBePromoted ? 'rgba(74,222,128,.25)' : BORDER}` }}>
+                            <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
+                              <div style={{ width:32, height:32, borderRadius:'50%', background: w.member ? avatarColor(w.member.name) : MUTED, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', flexShrink:0 }}>
+                                {w.member ? initials(w.member.name) : '?'}
+                              </div>
+                              <div style={{ minWidth:0 }}>
+                                <div style={{ color:CREAM, fontSize:13, fontWeight:500 }}>#{w.position} &nbsp;{w.member?.name ?? '—'}</div>
+                                <div style={{ color:MUTED, fontSize:11 }}>{w.member?.phone?.replace('91','+91 ')}</div>
+                              </div>
+                            </div>
+                            <span style={{ fontSize:11, textAlign:'right', color: w.canBePromoted ? '#4ade80' : '#fbbf24', flexShrink:0, maxWidth:200 }}>
+                              {w.canBePromoted ? 'Gets the next spot' : w.reason}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
