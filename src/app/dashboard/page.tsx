@@ -413,6 +413,13 @@ export default function DashboardPage() {
              so every class stays reachable by scrolling instead of hidden. */
           .wk-grid{grid-template-columns:1fr;gap:20px}
           .wk-head{flex-direction:row;align-items:baseline;gap:10px}
+
+          /* Book, Waitlist and Move here were 31px tall on a 360px screen.
+             That is a thumb target well under the 44px a phone wants, on the
+             one control every member has to hit to use the studio at all.
+             Measured at 360x780, not guessed. */
+          .wk-act{min-height:44px;font-size:13px;padding:0 10px}
+          .day-btn{min-height:44px}
         }
         .day-btn:hover{transform:translateY(-2px)}
         .slot-card{transition:border-color .15s,background .15s}
