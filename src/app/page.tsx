@@ -83,6 +83,13 @@ const CSS = `
     .test-grid { grid-template-columns: 1fr !important }
     .plans-grid { grid-template-columns: 1fr 1fr !important }
     .cta-grid { grid-template-columns: 1fr !important; text-align: center }
+    /* Every other grid on this page had a class and a mobile rule; this one
+       was written inline with neither, so it stayed three columns at 375px and
+       the cards clipped their own labels ("HEELS & FLOORWOR", "Commu"). */
+    .gallery-grid { grid-template-columns: 1fr 1fr !important }
+    .gallery-grid > * { grid-column: span 1 !important }
+    /* Five tiles in two columns leaves a hole; the last one takes the row. */
+    .gallery-grid > *:last-child { grid-column: span 2 !important }
     .mob-hide { display: none !important }
     .mob-menu-btn { display: flex !important }
     .nav-links { display: none !important }
@@ -92,6 +99,9 @@ const CSS = `
     .plans-grid { grid-template-columns: 1fr !important }
     .hero-h1 { font-size: 40px !important }
     .stats-row { flex-direction: column !important; gap: 18px !important }
+    /* Two columns still read well on a phone -- five stacked tiles would be a
+       lot of empty scrolling -- but the cards need their padding back. */
+    .gallery-card { padding: 28px 18px !important; min-height: 150px !important }
   }
 `;
 
@@ -448,19 +458,19 @@ export default function HomePage() {
                 {label}
               </button>
             ))}
-            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'flex', alignItems: 'center', gap: 9, color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
-              <IgIcon size={16} />{INSTAGRAM_HANDLE}
-            </a>
             <Link href="/schedule" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
               Schedule
             </Link>
             <Link href="/workshops" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
               Workshops
             </Link>
-            <Link href="/login" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0' }}>
+            <Link href="/login" style={{ display: 'block', color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0', borderBottom: '1px solid rgba(241,233,218,0.07)' }}>
               Member login
             </Link>
+            <a href={INSTAGRAM} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'flex', alignItems: 'center', gap: 9, color: CREAM, fontSize: 15, fontWeight: 500, padding: '12px 0' }}>
+              <IgIcon size={16} />{INSTAGRAM_HANDLE}
+            </a>
           </div>
         )}
       </header>
@@ -674,9 +684,9 @@ export default function HomePage() {
               A bright, welcoming space built for pole — professional poles, quality equipment and AC, kept spotlessly clean.
             </p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gridTemplateRows: 'auto auto', gap: 4 }}>
+          <div className="gallery-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gridTemplateRows: 'auto auto', gap: 4 }}>
             {GALLERY.map((g, i) => (
-              <div key={g.label} style={{ background: g.bg, border: `1px solid ${g.accent}12`, borderRadius: 2, padding: '40px 28px', position: 'relative', overflow: 'hidden', gridColumn: i === 3 ? 'span 2' : 'span 1', minHeight: i === 3 ? 180 : 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+              <div key={g.label} className="gallery-card" style={{ background: g.bg, border: `1px solid ${g.accent}12`, borderRadius: 2, padding: '40px 28px', position: 'relative', overflow: 'hidden', gridColumn: i === 3 ? 'span 2' : 'span 1', minHeight: i === 3 ? 180 : 200, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
                 <div style={{ fontSize: 10, color: g.accent, letterSpacing: '.18em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 600, opacity: 0.8 }}>{g.sub}</div>
                 <div style={{ fontFamily: SERIF, fontSize: 19, fontWeight: 700, color: CREAM }}>{g.label}</div>
               </div>
