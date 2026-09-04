@@ -261,8 +261,15 @@ export default function DashboardPage() {
     setMsg(null); setBusyId(bookingId);
     const r = await api('/api/booking/cancel', { json: { bookingId } });
     setBusyId(null);
-    setMsg(r.ok ? { text: 'Booking cancelled.', ok: true } : { text: r.error!, ok: false });
-    if (r.ok) fetchAll();
+    if (!r.ok) { setMsg({ text: r.error!, ok: false }); return; }
+    // The API has always said whether the class came back; the dashboard never
+    // passed it on, so a member cancelling inside the grace window had no way
+    // to tell a correction from a class they had just lost.
+    const parts = ['Booking cancelled.'];
+    if (r.data?.credit_returned) parts.push('The class has gone back on your pack.');
+    if (r.data?.reschedule_returned) parts.push('Your reschedule for the month is available again.');
+    setMsg({ text: parts.join(' '), ok: true });
+    fetchAll();
   }
 
   async function rescheduleClass(oldId: string, newId: string) {

@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   // Verify booking belongs to this member
   const { data: booking } = await db
     .from('bookings')
-    .select('id, class_id, status, created_at')
+    .select('id, class_id, status, created_at, rescheduled_from')
     .eq('id', bookingId)
     .eq('member_id', memberId)
     .single();
@@ -64,6 +64,27 @@ export async function POST(req: NextRequest) {
     .eq('id', bookingId);
 
   /**
+   * If this booking only exists because the member rescheduled into it, and
+   * they are undoing that inside the grace window, then the reschedule is
+   * being undone too -- so the month's allowance comes back with it.
+   *
+   * Without this the grace window forgave a mis-tapped booking but not a
+   * mis-tapped reschedule: a member moved a class and changed their mind
+   * ninety seconds later, and the move left no trace anywhere except a spent
+   * allowance she could not get back for the rest of the month.
+   *
+   * Not a loophole. Undoing a reschedule this way gives back the credit and
+   * the allowance but not the original seat, so it always leaves the member
+   * with less than they started with.
+   */
+  const rescheduleReturned = withinGrace && !!booking.rescheduled_from;
+  if (rescheduleReturned) {
+    await db.from('members')
+      .update({ reschedule_used_this_month: false })
+      .eq('id', memberId);
+  }
+
+  /**
    * A place has come free, so it goes to the front of the waitlist rather than
    * to whoever refreshes first. Shared with the admin capacity change, so both
    * routes apply the same eligibility rules and both charge the promotion to a
@@ -73,5 +94,10 @@ export async function POST(req: NextRequest) {
 
   // credit_returned lets the dashboard say so, rather than the member having
   // to work out whether their class came back.
-  return NextResponse.json({ success: true, promoted: promoted.length > 0, credit_returned: withinGrace });
+  return NextResponse.json({
+    success: true,
+    promoted: promoted.length > 0,
+    credit_returned: withinGrace,
+    reschedule_returned: rescheduleReturned,
+  });
 }
