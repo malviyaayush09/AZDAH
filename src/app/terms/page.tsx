@@ -41,8 +41,8 @@ export default function TermsPage() {
           {
             title: '3. Class Bookings',
             body: `• Classes must be booked through the AZDAH member portal.
-• Cancellations and reschedules must be notified at least 6 hours before the class start time.
-• Late cancellations (within 6 hours) or no-shows cannot be refunded or rescheduled.
+• Cancellations must be notified at least 6 hours before the class start time. A reschedule may be made at any time before the class starts.
+• Late cancellations (within 6 hours) and no-shows are not refunded. A member may still move the class using their monthly reschedule, provided it is unused and the class has not begun.
 • Each member receives one reschedule per membership month, and only one class on a pack may be rescheduled. Additional rescheduling is not permitted.
 • Class packs are valid for four weeks from the date of payment. Packs are non-transferable and are not extended beyond four weeks.
 • If a class is full, you may join the waitlist. Waitlist members are confirmed in order as spots open.`,

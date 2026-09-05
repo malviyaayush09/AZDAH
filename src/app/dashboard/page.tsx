@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Settings, CalendarDays, Info, Eye, EyeOff, User } from 'lucide-react';
 import { Toast } from '@/components/Toast';
-import { isPastNoticeWindow as pastNotice, NOTICE_HOURS } from '@/lib/date';
+import { isPastNoticeWindow as pastNotice, classHasStarted, NOTICE_HOURS } from '@/lib/date';
 import { api } from '@/lib/api';
 
 type MemberInfo = {
@@ -861,11 +861,11 @@ export default function DashboardPage() {
                       old wording flatly contradicted it — it told members the
                       class is always counted, which is no longer true for the
                       first fifteen minutes. */}
-                  <Info size={13} strokeWidth={1.5} style={{flexShrink:0}} /> Change your mind within 15 minutes of booking and cancelling gives the class straight back. After that, cancelling frees your place for someone else but the class still counts against your pack — to move it, use your reschedule for the month instead, at least 6 hours before it starts.
+                  <Info size={13} strokeWidth={1.5} style={{flexShrink:0}} /> Change your mind within 15 minutes of booking and cancelling gives the class straight back. After that, cancelling frees your place for someone else but the class still counts against your pack, and needs {NOTICE_HOURS} hours’ notice. To move a class instead, use your one reschedule for the month — that works any time before the class starts.
                 </div>
                 {!member!.reschedule_used&&!rescheduleMode&&myBookings.length>0&&(
                   <div style={{marginBottom:16,padding:'10px 14px',background:'rgba(37,99,235,.08)',border:'1px solid rgba(37,99,235,.25)',borderRadius:8,fontSize:12,color:'#93c5fd'}}>
-                    <Info size={13} strokeWidth={1.5} style={{flexShrink:0,marginRight:6}} /> You have 1 free reschedule available this month.
+                    <Info size={13} strokeWidth={1.5} style={{flexShrink:0,marginRight:6}} /> You have 1 free reschedule available this month — usable any time before a class starts.
                   </div>
                 )}
                 {myBookings.length===0?(
@@ -891,12 +891,12 @@ export default function DashboardPage() {
                           </div>
                           <span style={{fontSize:11,padding:'5px 12px',background:'rgba(74,222,128,.1)',color:'#4ade80',border:'1px solid rgba(74,222,128,.25)',borderRadius:8,flexShrink:0}}>Confirmed</span>
                           <div style={{display:'flex',gap:6,flexShrink:0}}>
-                            {pastNotice(cls.class_date,cls.start_time)&&(
+                            {pastNotice(cls.class_date,cls.start_time)&&(member!.reschedule_used||rescheduleMode)&&(
                               <span style={{fontSize:11,color:MUTED,alignSelf:'center'}}>
-                                Within {NOTICE_HOURS}h of start
+                                Too late to cancel ({NOTICE_HOURS}h notice)
                               </span>
                             )}
-                            {!pastNotice(cls.class_date,cls.start_time)&&!member!.reschedule_used&&!rescheduleMode&&(
+                            {!classHasStarted(cls.class_date,cls.start_time)&&!member!.reschedule_used&&!rescheduleMode&&(
                               <button onClick={()=>{setRescheduleMode(cls.my_booking_id!);setTab('book');}}
                                 style={{padding:'8px 14px',fontSize:12,background:'none',border:`1px solid ${ORANGE}`,color:ORANGE,borderRadius:8,cursor:'pointer',fontWeight:500}}
                                 onMouseOver={e=>e.currentTarget.style.background=`${ORANGE}12`} onMouseOut={e=>e.currentTarget.style.background='none'}>

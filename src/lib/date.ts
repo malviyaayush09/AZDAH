@@ -29,9 +29,15 @@ export function classHasStarted(classDate: string, startTime: string): boolean {
   return classStartsAt(classDate, startTime).getTime() <= Date.now();
 }
 
-// AZDAH's studio policy: a member must give this much notice to cancel or
-// reschedule. It is stated in the site FAQ and in the Terms, so this constant
-// is the single place it lives on the server.
+// AZDAH's studio policy: a member must give this much notice to CANCEL. It is
+// stated in the site FAQ and in the Terms, so this constant is the single place
+// it lives on the server.
+//
+// Rescheduling is deliberately not bound by it. The monthly reschedule is the
+// one forgiving move a member gets, and the studio would rather someone moved a
+// class an hour before it started than silently missed it -- so it is allowed
+// any time before the class begins. Cancelling still needs the notice, because
+// a cancellation gives nothing back and the seat is harder to fill.
 export const NOTICE_HOURS = 6;
 
 export function hoursUntilClass(classDate: string, startTime: string): number {

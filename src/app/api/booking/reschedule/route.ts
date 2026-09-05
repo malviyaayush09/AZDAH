@@ -4,7 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { verifySession } from '@/lib/auth';
 import { sendRescheduleConfirmed } from '@/lib/whatsapp';
-import { classHasStarted, isPastNoticeWindow, NOTICE_HOURS } from '@/lib/date';
+import { classHasStarted } from '@/lib/date';
+import { promoteFromWaitlist } from '@/lib/waitlist';
 import { pickPackForClass, packCoversCategory, getSpendablePacks } from '@/lib/pack';
 
 export async function POST(req: NextRequest) {
@@ -57,15 +58,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Booking not found or already cancelled' }, { status: 404 });
   }
 
-  // Block reschedule if original class already started
+  /**
+   * The only timing limit on a reschedule is that the class has not begun.
+   * It used to require the same notice as a cancellation; the studio would
+   * rather a member moved a class late than missed it, and they only get one
+   * of these a month.
+   */
   const { data: oldClass } = await db
     .from('classes')
     .select('class_date, start_time')
     .eq('id', oldBooking.class_id)
     .single();
-  if (oldClass && isPastNoticeWindow(oldClass.class_date, oldClass.start_time)) {
+  if (oldClass && classHasStarted(oldClass.class_date, oldClass.start_time)) {
     return NextResponse.json(
-      { error: `Reschedules need at least ${NOTICE_HOURS} hours' notice before the class starts.` },
+      { error: 'That class has already started, so it can no longer be moved.' },
       { status: 400 }
     );
   }
@@ -172,6 +178,18 @@ export async function POST(req: NextRequest) {
     await db.from('bookings').delete().eq('rescheduled_from', oldBookingId).eq('member_id', memberId);
     return NextResponse.json({ error: 'Reschedule failed' }, { status: 500 });
   }
+
+  /**
+   * Moving out of a class frees a seat exactly as cancelling does, and until
+   * now only cancelling offered it to the queue -- so a rescheduled seat sat
+   * empty with someone waiting for it. It matters more now that a member can
+   * move a class an hour before it starts, which is far too late for anyone to
+   * notice the opening on their own.
+   *
+   * Best effort: the member's reschedule has already succeeded, and a failure
+   * to promote must not turn that into an error for them.
+   */
+  await promoteFromWaitlist(db, oldBooking.class_id, 1).catch(() => []);
 
   // WhatsApp notification
   if (member) {
