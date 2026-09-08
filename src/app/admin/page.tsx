@@ -1246,14 +1246,19 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 Your schedule ends {fmtDate(sch.ends_on)}{sch.days_left >= 0 ? ` — ${sch.days_left} day${sch.days_left===1?'':'s'} away` : ''}
               </div>
               <div style={{ fontSize:12.5, color:MUTED, lineHeight:1.55, marginBottom:11 }}>
-                {sch.stranded_credits > 0 && (
-                  <>
-                    <strong style={{ color:ink, fontWeight:600 }}>
-                      {sch.stranded_members} member{sch.stranded_members===1?'':'s'} hold {sch.stranded_credits} paid class{sch.stranded_credits===1?'':'es'} that expire after your last published class
-                    </strong>
-                    {' '}— they cannot book them at all until you add more.{' '}
-                  </>
-                )}
+                {sch.stranded_credits > 0 && (() => {
+                  const gap = (sch.at_risk || []).reduce((n, r) => n + r.shortfall, 0);
+                  return (
+                    <>
+                      <strong style={{ color:ink, fontWeight:600 }}>
+                        {sch.stranded_members} member{sch.stranded_members===1?'':'s'} hold {sch.stranded_credits} paid class{sch.stranded_credits===1?'':'es'} that run past your last published class
+                      </strong>
+                      {gap > 0
+                        ? <>{' '}— and {gap} of those {gap===1?'has':'have'} nowhere to go even after everything you have published.{' '}</>
+                        : <>{' '}— they can book what is published, but not everything they have paid for.{' '}</>}
+                    </>
+                  );
+                })()}
                 {oversubscribed && (
                   <>
                     In the next 14 days there are only <strong style={{ color:CREAM, fontWeight:600 }}>{sch.seats_free_next_14_days} free places</strong> across
