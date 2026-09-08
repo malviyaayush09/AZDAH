@@ -256,15 +256,24 @@ export default function AdminPage() {
     inactive_members: { id: string; name: string; phone: string; plan_name: string; plan_end: string; created_at: string }[];
     whatsapp_enabled?: boolean;
   };
+  type AtRiskMember = {
+    member_id: string; name: string; phone: string; plan_name: string;
+    credits_left: number; bookable_now: number; shortfall: number;
+    expires_on: string; days_left: number;
+    categories: string[] | null; reason: 'needs_classes' | 'can_book_now';
+  };
   type ScheduleHealth = {
     ends_on: string | null; days_left: number;
     classes_next_14_days: number; seats_free_next_14_days: number;
     credits_expiring_next_14_days: number;
     stranded_members: number; stranded_credits: number;
+    at_risk?: AtRiskMember[];
   };
   const [overviewStats, setOverviewStats] = useState<OverviewStats | null>(null);
   // Per-day toggle for revealing cancelled classes in the calendar.
   const [expandedCancelled, setExpandedCancelled] = useState<Record<string, boolean>>({});
+  // The banner named a count but not the people; this reveals them.
+  const [showAtRisk, setShowAtRisk] = useState(false);
 
   // Membership payments captured by Razorpay where no member was ever created.
   type MembershipOrphan = {
@@ -1253,6 +1262,65 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 )}
                 Nothing adds classes automatically — every class is created here.
               </div>
+              {(sch.at_risk?.length ?? 0) > 0 && (() => {
+                const rows = sch.at_risk!;
+                const short = rows.filter(r => r.reason === 'needs_classes');
+                return (
+                <div style={{ marginBottom:11 }}>
+                  <button onClick={() => setShowAtRisk(v => !v)}
+                    style={{ fontSize:12, fontWeight:600, color:ink, background:'none', border:`1px solid rgba(${tint},.4)`, padding:'6px 12px', borderRadius:6, cursor:'pointer', minHeight:36 }}>
+                    {showAtRisk ? 'Hide the list' : `Show who — ${rows.length} pack${rows.length===1?'':'s'}`}
+                  </button>
+                  {showAtRisk && (
+                    <>
+                      {short.length > 0 && (
+                        <div style={{ marginTop:10, fontSize:12, color:MUTED, lineHeight:1.5 }}>
+                          {short.length} of these {short.length===1?'has':'have'} more classes paid for than you have published in
+                          {' '}{Array.from(new Set(short.flatMap(r => (r.categories||[]).map(c => CATEGORY_LABEL[c] || c)))).join(' and ')}.
+                          {' '}Messaging {short.length===1?'them':'those'} to book will not help until the classes exist.
+                        </div>
+                      )}
+                      <div style={{ marginTop:10, display:'flex', flexDirection:'column', gap:7, maxHeight:340, overflowY:'auto' }}>
+                        {rows.map(r => {
+                          const cats = (r.categories || []).map(c => CATEGORY_LABEL[c] || c).join(', ');
+                          const first = r.name.split(' ')[0];
+                          /* Pre-fills WhatsApp's box; it does not send. The wording has to
+                             match reality -- offering to book somebody who has nothing to
+                             book into is exactly the message that creates a complaint. */
+                          const text = encodeURIComponent(
+                            r.reason === 'can_book_now'
+                              ? `Hi ${first}, you still have ${r.credits_left} class${r.credits_left===1?'':'es'} left on your ${r.plan_name} pack${cats ? ` (${cats})` : ''}, and it runs out on ${fmtDate(r.expires_on)}. Shall I book you in?`
+                              : `Hi ${first}, you have ${r.credits_left} class${r.credits_left===1?'':'es'} left on your ${r.plan_name} pack until ${fmtDate(r.expires_on)}. We are adding more ${cats || 'class'} dates — I will send them as soon as they are up so you can use all of them.`);
+                          const bad = r.reason === 'needs_classes';
+                          return (
+                            <div key={r.member_id + r.expires_on} style={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:9, padding:'9px 11px', background:'rgba(0,0,0,.25)', border:`1px solid ${bad ? 'rgba(248,113,113,.3)' : BORDER}`, borderRadius:7 }}>
+                              <div style={{ flex:'1 1 150px', minWidth:0 }}>
+                                <div style={{ fontSize:13, fontWeight:600, color:CREAM, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.name}</div>
+                                <div style={{ fontSize:11, color:MUTED }}>{r.plan_name}{cats ? ` · ${cats}` : ''}</div>
+                              </div>
+                              <div style={{ fontSize:12, flexShrink:0, textAlign:'right' }}>
+                                <div style={{ fontWeight:700, color: bad ? '#f87171' : CREAM }}>{r.credits_left} left</div>
+                                <div style={{ fontSize:10.5, color:MUTED }}>
+                                  {bad ? `only ${r.bookable_now} to book` : `${r.bookable_now} to book`}
+                                </div>
+                              </div>
+                              <div style={{ fontSize:11, color:MUTED, flexShrink:0, textAlign:'right' }}>
+                                {r.days_left} day{r.days_left===1?'':'s'}
+                                <div style={{ fontSize:10 }}>{fmtDate(r.expires_on)}</div>
+                              </div>
+                              <a href={`https://wa.me/${r.phone}?text=${text}`} target="_blank" rel="noreferrer"
+                                style={{ fontSize:11, fontWeight:600, padding:'7px 12px', background:'rgba(37,211,102,.12)', color:'#25D366', border:'1px solid rgba(37,211,102,.3)', borderRadius:6, textDecoration:'none', flexShrink:0, minHeight:36, display:'flex', alignItems:'center' }}>
+                                WhatsApp
+                              </a>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+                );
+              })()}
               <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
                 <button onClick={() => goTab('add-class')}
                   style={{ fontSize:12, fontWeight:700, letterSpacing:'.05em', textTransform:'uppercase', background:ORANGE, color:'#fff', border:'none', padding:'8px 14px', borderRadius:6, cursor:'pointer' }}>

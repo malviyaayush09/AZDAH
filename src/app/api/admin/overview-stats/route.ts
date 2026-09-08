@@ -68,14 +68,14 @@ export async function GET(req: NextRequest) {
   const horizon = horizonEnd.toISOString().slice(0, 10);
 
   const [upcomingRes, packRes] = await Promise.all([
-    db.from('classes').select('id, class_date, capacity').eq('is_cancelled', false).gte('class_date', today),
+    db.from('classes').select('id, class_date, capacity, category').eq('is_cancelled', false).gte('class_date', today),
     db.from('member_packs')
-      .select('id, member_id, classes_included, category_limits, expires_on')
+      .select('id, member_id, plan_name, classes_included, allowed_categories, category_limits, expires_on')
       .eq('is_frozen', false)
       .gte('expires_on', today),
   ]);
 
-  const upcomingCls = (upcomingRes.data || []) as { id: string; class_date: string; capacity: number }[];
+  const upcomingCls = (upcomingRes.data || []) as { id: string; class_date: string; capacity: number; category: string | null }[];
   const dates = upcomingCls.map((c) => c.class_date).sort();
   const scheduleEndsOn = dates.length ? dates[dates.length - 1] : null;
   const classesInHorizon = upcomingCls.filter((c) => c.class_date <= horizon).length;
@@ -100,6 +100,45 @@ export async function GET(req: NextRequest) {
   let creditsExpiringInHorizon = 0;
   let strandedMembers = new Set<string>();
   let strandedCredits = 0;
+  /**
+   * The banner used to report only a count -- "4 members hold 11 paid classes"
+   * -- which left the studio scrolling the member list guessing who. The loop
+   * below already knows exactly who each pack belongs to and how much is left
+   * on it, so keep the rows instead of throwing them away.
+   */
+  type AtRisk = {
+    member_id: string; name: string; phone: string; plan_name: string;
+    credits_left: number; bookable_now: number; shortfall: number;
+    expires_on: string; days_left: number;
+    categories: string[] | null; reason: 'needs_classes' | 'can_book_now';
+  };
+  const atRiskRows: Omit<AtRisk, 'name' | 'phone'>[] = [];
+
+  /**
+   * Whether a pack outlives the last published class is a scheduling signal,
+   * not a per-member one: four of five members flagged that way could book
+   * today perfectly well. What decides what to say to someone is credits held
+   * against classes still open to them in their own discipline before their
+   * pack runs out. Get that wrong and the studio messages "shall I book you
+   * in?" to somebody with nothing to book.
+   */
+  const openByCat = new Map<string, { id: string; class_date: string }[]>();
+  for (const c of upcomingCls) {
+    if (!c.category) continue;
+    if ((seatsTaken.get(c.id) || 0) >= (c.capacity || 0)) continue;
+    if (!openByCat.has(c.category)) openByCat.set(c.category, []);
+    openByCat.get(c.category)!.push({ id: c.id, class_date: c.class_date });
+  }
+  const { data: heldRows } = await db
+    .from('bookings')
+    .select('member_id, class_id')
+    .eq('status', 'confirmed');
+  const heldBy = new Map<string, Set<string>>();
+  for (const b of heldRows || []) {
+    const k = b.member_id as string;
+    if (!heldBy.has(k)) heldBy.set(k, new Set());
+    heldBy.get(k)!.add(b.class_id as string);
+  }
   if (livePacks.length) {
     const { data: spend } = await db
       .from('bookings')
@@ -121,11 +160,56 @@ export async function GET(req: NextRequest) {
       if (left === 0) continue;
       if (p.expires_on <= horizon) creditsExpiringInHorizon += left;
       // Credits that outlive the last published class can never be spent.
-      if (scheduleEndsOn && p.expires_on > scheduleEndsOn) {
+      const stranded = !!scheduleEndsOn && p.expires_on > scheduleEndsOn;
+      if (stranded) {
         strandedMembers.add(p.member_id as string);
         strandedCredits += left;
       }
+      if (stranded || p.expires_on <= horizon) {
+        const pk = p as { allowed_categories?: string[] | null; plan_name?: string | null };
+        const cats = limits ? Object.keys(limits) : (pk.allowed_categories ?? null);
+        const held = heldBy.get(p.member_id as string) || new Set<string>();
+        const pool = (cats && cats.length
+          ? cats.flatMap((c) => openByCat.get(c) || [])
+          : Array.from(openByCat.values()).flat()
+        ).filter((c) => c.class_date <= p.expires_on && !held.has(c.id));
+        const bookable = pool.length;
+        atRiskRows.push({
+          member_id: p.member_id as string,
+          plan_name: (pk.plan_name || '').trim() || 'Pack',
+          credits_left: left,
+          bookable_now: bookable,
+          shortfall: Math.max(0, left - bookable),
+          expires_on: p.expires_on,
+          days_left: Math.round(
+            (new Date(`${p.expires_on}T00:00:00Z`).getTime() - new Date(`${today}T00:00:00Z`).getTime()) / 86400000,
+          ),
+          categories: cats,
+          reason: bookable < left ? 'needs_classes' : 'can_book_now',
+        });
+      }
     }
+  }
+
+  // One lookup for every name and number the list needs, rather than one per row.
+  let atRisk: AtRisk[] = [];
+  if (atRiskRows.length) {
+    const ids = Array.from(new Set(atRiskRows.map((r) => r.member_id)));
+    const { data: people } = await db
+      .from('members')
+      .select('id, name, phone, is_active')
+      .in('id', ids)
+      .eq('is_active', true);
+    const byId = new Map((people || []).map((m) => [m.id as string, m]));
+    atRisk = atRiskRows
+      .filter((r) => byId.has(r.member_id))
+      .map((r) => ({
+        ...r,
+        name: ((byId.get(r.member_id) as { name?: string }).name || '').trim(),
+        phone: (byId.get(r.member_id) as { phone?: string }).phone || '',
+      }))
+      // Soonest to lose their money first: that is the order to work down.
+      .sort((a, b) => a.expires_on.localeCompare(b.expires_on) || b.credits_left - a.credits_left);
   }
 
   const todayClasses = todayClassesRes.data || [];
@@ -165,6 +249,7 @@ export async function GET(req: NextRequest) {
       credits_expiring_next_14_days: creditsExpiringInHorizon,
       stranded_members: strandedMembers.size,
       stranded_credits: strandedCredits,
+      at_risk: atRisk,
     },
     expiring_this_week: (expiringRes.data || []).map(shape),
     inactive_members: (inactiveRes.data || []).map(shape),
