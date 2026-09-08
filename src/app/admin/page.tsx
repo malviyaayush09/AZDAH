@@ -275,12 +275,54 @@ export default function AdminPage() {
   // The banner named a count but not the people; this reveals them.
   const [showAtRisk, setShowAtRisk] = useState(false);
 
+  /**
+   * Dismissing an alert stores the numbers it was dismissed at, not a boolean.
+   * A plain dismiss on a money alert is a bug waiting to happen: she clears
+   * "1 paid membership with no account", a second one lands next week, and the
+   * box never comes back. Storing the figures means a worse state re-opens it
+   * by itself.
+   */
+  type AlertDismiss = { orphans?: number; schedDays?: number; schedGap?: number };
+  const ALERT_KEY = 'azdah.admin.alerts';
+  const [dismissed, setDismissed] = useState<AlertDismiss>({});
+  useEffect(() => {
+    try { setDismissed(JSON.parse(localStorage.getItem(ALERT_KEY) || '{}')); } catch { /* private mode */ }
+  }, []);
+  const dismissAlert = (patch: AlertDismiss) => setDismissed((d) => {
+    const next = { ...d, ...patch };
+    try { localStorage.setItem(ALERT_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+    return next;
+  });
+
+
   // Membership payments captured by Razorpay where no member was ever created.
   type MembershipOrphan = {
     order_id: string; payment_id: string | null; name: string; phone: string;
     email: string | null; amount_paise: number | null; created_at: string; reason: string;
   };
   const [memberOrphans, setMemberOrphans] = useState<MembershipOrphan[]>([]);
+  /**
+   * Both persistent alerts, worked out once. The chip on the other tabs and
+   * the banners on Dashboard have to agree, and computing the conditions twice
+   * is how they drift apart.
+   */
+  const schedForAlert = (overviewStats as unknown as { schedule?: ScheduleHealth } | null)?.schedule;
+  const scheduleGap = (schedForAlert?.at_risk || []).reduce((n, r) => n + r.shortfall, 0);
+  const scheduleActive = !!schedForAlert?.ends_on && (
+    schedForAlert.days_left <= 21 ||
+    schedForAlert.credits_expiring_next_14_days > schedForAlert.seats_free_next_14_days ||
+    schedForAlert.stranded_credits > 0
+  );
+  const orphanActive = memberOrphans.length > 0;
+  // A dismissal only holds while things are no worse than when she dismissed it.
+  const orphanVisible = orphanActive &&
+    (dismissed.orphans == null || memberOrphans.length > dismissed.orphans);
+  const scheduleVisible = scheduleActive && !!schedForAlert && (
+    dismissed.schedDays == null ||
+    schedForAlert.days_left < dismissed.schedDays ||
+    scheduleGap > (dismissed.schedGap ?? 0)
+  );
+  const alertCount = (orphanActive ? 1 : 0) + (scheduleActive ? 1 : 0);
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -1165,7 +1207,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 )}
                 {group.items.map(it => {
                   const on = tab === it.k;
-                  return (
+                    return (
                     <button key={it.k} onClick={() => goTab(it.k)} className="anav"
                       style={{ color: on ? ORANGE : MUTED, background: on ? `${ORANGE}14` : 'transparent',
                         fontWeight: on ? 600 : 400 }}>
@@ -1189,12 +1231,30 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
         <h1 style={{ fontFamily:SERIF, fontSize:30, fontWeight:800, color:CREAM, margin:'0 0 5px', lineHeight:1.05, letterSpacing:'-.01em' }}>{TITLES[tab][0]}</h1>
         <p style={{ color:MUTED, fontSize:13.5, margin:'0 0 22px' }}>{TITLES[tab][1]}</p>
 
+        {/* On the other nine tabs the two banners cost 233px of a 812px phone
+            before any of the page showed. They live on Dashboard now, and this
+            is what is left everywhere else: never zero when something is wrong,
+            never big enough to be in the way. */}
+        {tab !== 'overview' && alertCount > 0 && (
+          <button onClick={() => goTab('overview')}
+            style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, padding:'7px 12px', minHeight:36,
+                     background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.3)', borderRadius:8,
+                     color:'#f87171', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', background:'#f87171', flexShrink:0 }} />
+            {alertCount} thing{alertCount===1?'':'s'} need{alertCount===1?'s':''} you on the Dashboard
+            <span style={{ color:MUTED, fontWeight:500 }}>→</span>
+          </button>
+        )}
+
         {/* Money taken, nothing delivered. Highest-priority thing on the page. */}
-        {memberOrphans.length > 0 && (
+        {tab === 'overview' && orphanVisible && (
           <div style={{ marginBottom:16, padding:'14px 16px', background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.35)', borderRadius:10 }}>
             <div style={{ fontSize:13.5, fontWeight:700, color:'#f87171', marginBottom:4 }}>
               ⚠ {memberOrphans.length} paid membership{memberOrphans.length !== 1 ? 's' : ''} with no account created
             </div>
+            <button onClick={() => dismissAlert({ orphans: memberOrphans.length })}
+              style={{ float:'right', marginTop:-22, background:'none', border:'none', color:MUTED, fontSize:16, cursor:'pointer', padding:'2px 4px', minHeight:32 }}
+              title="Hide until another one appears">×</button>
             <div style={{ fontSize:12, color:'#d99', marginBottom:12, lineHeight:1.5 }}>
               Razorpay captured the money but the member was never set up — usually the browser closed mid-payment.
               Either create the member manually and share their login, or refund the payment in Razorpay.
@@ -1229,8 +1289,13 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
         {/* The schedule running out is the one problem the studio cannot see
             by looking at a calendar: it needs credits and expiry dates beside
             the class list. Fifteen members nearly lost 38 paid classes to it
-            before anyone noticed. Shown on every screen, not just Dashboard. */}
-        {(() => {
+            before anyone noticed.
+
+            It used to render on every screen for that reason. Measured on a
+            phone it was 233px of 812 before any of the page appeared, on all
+            ten tabs, so it is Dashboard-only now and the other tabs carry the
+            chip above instead. */}
+        {tab === 'overview' && scheduleVisible && (() => {
           const sch = (overviewStats as unknown as { schedule?: ScheduleHealth } | null)?.schedule;
           if (!sch || !sch.ends_on) return null;
           const short = sch.days_left <= 21;
@@ -1242,6 +1307,9 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
           const ink = urgent ? '#f87171' : '#fbbf24';
           return (
             <div style={{ marginBottom:16, padding:'13px 16px', background:`rgba(${tint},.08)`, border:`1px solid rgba(${tint},.32)`, borderRadius:10 }}>
+              <button onClick={() => dismissAlert({ schedDays: sch.days_left, schedGap: scheduleGap })}
+                style={{ float:'right', background:'none', border:'none', color:MUTED, fontSize:16, cursor:'pointer', padding:'2px 4px', minHeight:32 }}
+                title="Hide until it gets worse">×</button>
               <div style={{ fontSize:13.5, fontWeight:700, color:ink, marginBottom:5 }}>
                 Your schedule ends {fmtDate(sch.ends_on)}{sch.days_left >= 0 ? ` — ${sch.days_left} day${sch.days_left===1?'':'s'} away` : ''}
               </div>
