@@ -323,6 +323,13 @@ export default function AdminPage() {
     scheduleGap > (dismissed.schedGap ?? 0)
   );
   const alertCount = (orphanActive ? 1 : 0) + (scheduleActive ? 1 : 0);
+  // Dismissed but still true. Without a way back, the × was one-way and the
+  // chip on the other tabs pointed at a Dashboard with nothing on it.
+  const hiddenCount = (orphanActive && !orphanVisible ? 1 : 0) + (scheduleActive && !scheduleVisible ? 1 : 0);
+  const restoreAlerts = () => {
+    try { localStorage.removeItem(ALERT_KEY); } catch { /* private mode */ }
+    setDismissed({});
+  };
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -1407,6 +1414,20 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
             </div>
           );
         })()}
+
+        {/* Muted on purpose: she has already acknowledged these, so it should
+            not shout. It exists so the × is reversible and so the chip on the
+            other tabs never lands on an empty Dashboard. */}
+        {tab === 'overview' && hiddenCount > 0 && (
+          <button onClick={restoreAlerts}
+            style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, padding:'7px 12px', minHeight:36,
+                     background:'transparent', border:`1px solid ${BORDER}`, borderRadius:8,
+                     color:MUTED, fontSize:12, fontWeight:500, cursor:'pointer' }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', background:'rgba(248,113,113,.55)', flexShrink:0 }} />
+            {hiddenCount} hidden alert{hiddenCount===1?'':'s'} — still unresolved
+            <span style={{ color:CREAM, fontWeight:600 }}>Show</span>
+          </button>
+        )}
 
         {/* ════ DASHBOARD ════ */}
         {tab === 'overview' && (<>
