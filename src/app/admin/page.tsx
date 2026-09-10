@@ -1272,7 +1272,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
             never big enough to be in the way. */}
         {tab !== 'overview' && alertCount > 0 && (
           <button onClick={() => goTab('overview')}
-            style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, padding:'7px 12px', minHeight:36,
+            style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, padding:'7px 12px', minHeight:44,
                      background:'rgba(248,113,113,.08)', border:'1px solid rgba(248,113,113,.3)', borderRadius:8,
                      color:'#f87171', fontSize:12, fontWeight:600, cursor:'pointer' }}>
             <span style={{ width:6, height:6, borderRadius:'50%', background:'#f87171', flexShrink:0 }} />
@@ -1448,7 +1448,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
             other tabs never lands on an empty Dashboard. */}
         {tab === 'overview' && hiddenCount > 0 && (
           <button onClick={restoreAlerts}
-            style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, padding:'7px 12px', minHeight:36,
+            style={{ display:'flex', alignItems:'center', gap:8, marginBottom:18, padding:'7px 12px', minHeight:44,
                      background:'transparent', border:`1px solid ${BORDER}`, borderRadius:8,
                      color:MUTED, fontSize:12, fontWeight:500, cursor:'pointer' }}>
             <span style={{ width:6, height:6, borderRadius:'50%', background:'rgba(248,113,113,.55)', flexShrink:0 }} />
@@ -3133,17 +3133,17 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                              guess which one she meant. */
                           <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', justifyContent:'flex-end' }}>
                             <button disabled={removeBusy === b.id} onClick={() => removeFromClass(b.id, true)}
-                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:34, cursor:'pointer',
+                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:44, cursor:'pointer',
                                        border:'1px solid rgba(74,222,128,.4)', background:'rgba(74,222,128,.12)', color:'#4ade80' }}>
                               {removeBusy === b.id ? '…' : 'Give class back'}
                             </button>
                             <button disabled={removeBusy === b.id} onClick={() => removeFromClass(b.id, false)}
-                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:34, cursor:'pointer',
+                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:44, cursor:'pointer',
                                        border:'1px solid rgba(248,113,113,.4)', background:'rgba(248,113,113,.1)', color:'#f87171' }}>
                               {removeBusy === b.id ? '…' : 'Remove only'}
                             </button>
                             <button onClick={() => setRemovingBooking(null)}
-                              style={{ padding:'6px 8px', fontSize:11, borderRadius:5, minHeight:34, cursor:'pointer',
+                              style={{ padding:'6px 8px', fontSize:11, borderRadius:5, minHeight:44, cursor:'pointer',
                                        border:`1px solid ${BORDER}`, background:'transparent', color:MUTED }}>
                               Keep
                             </button>
@@ -3164,7 +3164,7 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                           <button
                             onClick={() => setRemovingBooking(b.id)}
                             title="Take this member out of the class"
-                            style={{ padding:'4px 9px', fontSize:13, lineHeight:1, borderRadius:5, minHeight:30, cursor:'pointer',
+                            style={{ padding:'4px 9px', fontSize:13, lineHeight:1, borderRadius:5, minHeight:44, minWidth:38, cursor:'pointer',
                                      border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontWeight:600 }}>
                             ×
                           </button>
