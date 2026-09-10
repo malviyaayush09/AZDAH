@@ -71,11 +71,37 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const grossOf = (p: PackRow) => {
+  const amountOf = (p: PackRow) => {
     if (p.amount_paid_paise != null) return p.amount_paid_paise;
     const paid = p.razorpay_order_id ? paidByOrder.get(p.razorpay_order_id) : undefined;
     return paid ?? pick(p.membership_plans)?.price_paise ?? 0;
   };
+
+  /**
+   * One payment, one amount.
+   *
+   * This walked packs and priced each one, so a payment that produced two packs
+   * was counted twice. That happened once: a member paid Rs 7,670 for a
+   * four-class pack on 31 Aug and both the browser confirmation and Razorpay's
+   * webhook created a pack in the same second, which put Rs 7,670 of income in
+   * the total that never arrived.
+   *
+   * Computed once into a map rather than counted inside the pricing function,
+   * because netOf is called from four places and a running total inside it
+   * would give a different answer each time it was asked.
+   */
+  const countedPayments = new Set<string>();
+  const grossById = new Map<string, number>();
+  for (const p of all) {                                   // ascending by created_at
+    const key = p.razorpay_payment_id || p.razorpay_order_id;
+    if (key && countedPayments.has(key)) {
+      grossById.set(p.id, 0);                              // a second pack on the same payment
+      continue;
+    }
+    if (key) countedPayments.add(key);
+    grossById.set(p.id, amountOf(p));
+  }
+  const grossOf = (p: PackRow) => grossById.get(p.id) ?? 0;
 
   /**
    * Refunds are recorded per member, not per pack, so each is applied once
@@ -86,8 +112,11 @@ export async function GET(req: NextRequest) {
   for (const m of memberRows || []) {
     if (m.refunded_paise) refundByMember.set(m.id, m.refunded_paise);
   }
+  // The newest pack that actually carries an amount. Pointing a refund at a
+  // zero-valued duplicate would subtract it from nothing and lose it.
   const newestPackOf = new Map<string, string>();
-  for (const p of all) newestPackOf.set(p.member_id, p.id);   // ascending order, last wins
+  for (const p of all) if (grossOf(p) > 0) newestPackOf.set(p.member_id, p.id);   // ascending, last wins
+  for (const p of all) if (!newestPackOf.has(p.member_id)) newestPackOf.set(p.member_id, p.id);
 
   const netOf = (p: PackRow) => {
     const gross = grossOf(p);
