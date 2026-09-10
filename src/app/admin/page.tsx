@@ -3117,7 +3117,15 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', gap:7 }}>
                     {classBookings.map((b, i) => (
-                      <div key={b.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'10px 12px', background:b.attended?'rgba(74,222,128,.04)':FAINT, borderRadius:8, border:`1px solid ${b.attended?'rgba(74,222,128,.2)':BORDER}` }}>
+                      <div key={b.id} style={{ display:'flex',
+                        // While it is asking, the row stacks: the name keeps its
+                        // own line and the choice gets the full width, so the
+                        // labels can stay explicit instead of being shortened to
+                        // "Remove", which does not say whether the credit returns.
+                        flexDirection: removingBooking === b.id ? 'column' : 'row',
+                        alignItems: removingBooking === b.id ? 'stretch' : 'center',
+                        gap: removingBooking === b.id ? 9 : 0,
+                        justifyContent:'space-between', padding:'10px 12px', background:b.attended?'rgba(74,222,128,.04)':FAINT, borderRadius:8, border:`1px solid ${removingBooking === b.id ? 'rgba(248,113,113,.3)' : (b.attended?'rgba(74,222,128,.2)':BORDER)}` }}>
                         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                           <div style={{ width:32, height:32, borderRadius:'50%', background: b.member ? avatarColor(b.member.name) : MUTED, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', flexShrink:0 }}>
                             {b.member ? initials(b.member.name) : '?'}
@@ -3131,20 +3139,22 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                           /* The choice is the feature. Two labelled outcomes and a
                              way out, never a single "are you sure?" that has to
                              guess which one she meant. */
-                          <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                          <div style={{ display:'flex', alignItems:'stretch', gap:6, width:'100%' }}>
                             <button disabled={removeBusy === b.id} onClick={() => removeFromClass(b.id, true)}
-                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:44, cursor:'pointer',
-                                       border:'1px solid rgba(74,222,128,.4)', background:'rgba(74,222,128,.12)', color:'#4ade80' }}>
+                              style={{ flex:1, padding:'6px 8px', fontSize:11.5, fontWeight:600, borderRadius:6, minHeight:44, cursor:'pointer',
+                                       border:'1px solid rgba(74,222,128,.45)', background:'rgba(74,222,128,.12)', color:'#4ade80' }}>
                               {removeBusy === b.id ? '…' : 'Give class back'}
                             </button>
                             <button disabled={removeBusy === b.id} onClick={() => removeFromClass(b.id, false)}
-                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:44, cursor:'pointer',
-                                       border:'1px solid rgba(248,113,113,.4)', background:'rgba(248,113,113,.1)', color:'#f87171' }}>
+                              style={{ flex:1, padding:'6px 8px', fontSize:11.5, fontWeight:600, borderRadius:6, minHeight:44, cursor:'pointer',
+                                       border:'1px solid rgba(248,113,113,.45)', background:'rgba(248,113,113,.1)', color:'#f87171' }}>
                               {removeBusy === b.id ? '…' : 'Remove only'}
                             </button>
+                            {/* This is the button she wants after a mis-tap, so it
+                                cannot be the faintest thing on the row. */}
                             <button onClick={() => setRemovingBooking(null)}
-                              style={{ padding:'6px 8px', fontSize:11, borderRadius:5, minHeight:44, cursor:'pointer',
-                                       border:`1px solid ${BORDER}`, background:'transparent', color:MUTED }}>
+                              style={{ flex:'0 0 auto', padding:'6px 14px', fontSize:11.5, fontWeight:600, borderRadius:6, minHeight:44, cursor:'pointer',
+                                       border:`1px solid rgba(241,233,218,.35)`, background:'rgba(241,233,218,.06)', color:CREAM }}>
                               Keep
                             </button>
                           </div>
