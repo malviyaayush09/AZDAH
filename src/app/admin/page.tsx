@@ -171,6 +171,11 @@ export default function AdminPage() {
   const [weekStart, setWeekStart] = useState<Date>(() => mondayOf(new Date()));
   const [viewingClass, setViewingClass] = useState<ClassSlot | null>(null);
   const [classBookings, setClassBookings] = useState<ClassBooking[]>([]);
+  // Which row is asking "and does she get the class back?". A nested modal
+  // inside the class modal is worse on a phone than revealing the choice in
+  // place, and the choice is the whole point -- it must not be a default.
+  const [removingBooking, setRemovingBooking] = useState<string | null>(null);
+  const [removeBusy, setRemoveBusy] = useState<string | null>(null);
   const [capBusy, setCapBusy] = useState(false);
   const [classWaiting, setClassWaiting] = useState<ClassWaiting[]>([]);
   // Every confirmed booking in the visible week. Loaded up front so the
@@ -509,6 +514,29 @@ export default function AdminPage() {
       setClassBookings(prev => prev.map(b => b.id === bookingId ? { ...b, attended } : b));
     } else setMsg({ text: data.error || 'Failed to update attendance', ok: false });
     setAttendanceBusy(null);
+  }
+
+  /**
+   * Take one member out of a class. `restoreCredit` is passed explicitly rather
+   * than defaulted, because the two outcomes differ by a paid class and the
+   * studio has to have said which one it meant.
+   */
+  async function removeFromClass(bookingId: string, restoreCredit: boolean) {
+    if (!viewingClass) return;
+    setRemoveBusy(bookingId);
+    const r = await api(`/api/admin/classes/${viewingClass.id}/bookings/remove`, {
+      json: { bookingId, restoreCredit },
+    });
+    setRemoveBusy(null);
+    if (!r.ok) { setMsg({ text: r.error!, ok: false }); return; }
+    setRemovingBooking(null);
+    setClassBookings(prev => prev.filter(b => b.id !== bookingId));
+    const who = r.data?.member ? ` ${r.data.member}` : '';
+    const parts = [`Removed${who}.`];
+    parts.push(restoreCredit ? 'The class has gone back on their pack.' : 'The class stays used on their pack.');
+    if (r.data?.promoted?.length) parts.push(`${r.data.promoted[0]} came off the waitlist into the spot.`);
+    setMsg({ text: parts.join(' '), ok: true });
+    fetchAll();
   }
 
   async function duplicateClass(cls: ClassSlot) {
@@ -3099,6 +3127,28 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                             <div style={{ color:MUTED, fontSize:11 }}>{b.member?.phone?.replace('91','+91 ')}</div>
                           </div>
                         </div>
+                        {removingBooking === b.id ? (
+                          /* The choice is the feature. Two labelled outcomes and a
+                             way out, never a single "are you sure?" that has to
+                             guess which one she meant. */
+                          <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                            <button disabled={removeBusy === b.id} onClick={() => removeFromClass(b.id, true)}
+                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:34, cursor:'pointer',
+                                       border:'1px solid rgba(74,222,128,.4)', background:'rgba(74,222,128,.12)', color:'#4ade80' }}>
+                              {removeBusy === b.id ? '…' : 'Give class back'}
+                            </button>
+                            <button disabled={removeBusy === b.id} onClick={() => removeFromClass(b.id, false)}
+                              style={{ padding:'6px 10px', fontSize:11, fontWeight:600, borderRadius:5, minHeight:34, cursor:'pointer',
+                                       border:'1px solid rgba(248,113,113,.4)', background:'rgba(248,113,113,.1)', color:'#f87171' }}>
+                              {removeBusy === b.id ? '…' : 'Remove only'}
+                            </button>
+                            <button onClick={() => setRemovingBooking(null)}
+                              style={{ padding:'6px 8px', fontSize:11, borderRadius:5, minHeight:34, cursor:'pointer',
+                                       border:`1px solid ${BORDER}`, background:'transparent', color:MUTED }}>
+                              Keep
+                            </button>
+                          </div>
+                        ) : (
                         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                           {b.member?.plan_end && <span style={{ fontSize:11, color:MUTED }}>{fmtDate(b.member.plan_end)}</span>}
                           {b.member && (
@@ -3111,7 +3161,15 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                             style={{ padding:'4px 10px', fontSize:11, borderRadius:5, border:`1px solid ${b.attended?'rgba(74,222,128,.4)':'rgba(139,122,100,.3)'}`, background:b.attended?'rgba(74,222,128,.12)':'transparent', color:b.attended?'#4ade80':MUTED, cursor:'pointer', fontWeight:500 }}>
                             {attendanceBusy===b.id?'…':b.attended?'✓ Present':'Mark Present'}
                           </button>
+                          <button
+                            onClick={() => setRemovingBooking(b.id)}
+                            title="Take this member out of the class"
+                            style={{ padding:'4px 9px', fontSize:13, lineHeight:1, borderRadius:5, minHeight:30, cursor:'pointer',
+                                     border:`1px solid ${BORDER}`, background:'transparent', color:MUTED, fontWeight:600 }}>
+                            ×
+                          </button>
                         </div>
+                        )}
                       </div>
                     ))}
                   </div>

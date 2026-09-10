@@ -945,7 +945,7 @@ export default function DashboardPage() {
                             </div>
                             <div style={{flexShrink:0}}>
                               {cancelled?(
-                                <span style={{fontSize:10,padding:'3px 8px',background:'rgba(248,113,113,.1)',color:'#f87171',border:'1px solid rgba(248,113,113,.25)',borderRadius:999}}>{h.status}</span>
+                                <span style={{fontSize:10,padding:'3px 8px',background:'rgba(248,113,113,.1)',color:'#f87171',border:'1px solid rgba(248,113,113,.25)',borderRadius:999}}>{h.status==='rescheduled'?'Class returned':'Cancelled'}</span>
                               ):attended?(
                                 <span style={{fontSize:10,padding:'3px 8px',background:'rgba(74,222,128,.1)',color:'#4ade80',border:'1px solid rgba(74,222,128,.25)',borderRadius:999}}>Attended ✓</span>
                               ):(
