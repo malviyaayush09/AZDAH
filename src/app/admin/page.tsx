@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2 } from 'lucide-react';
+import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2, CalendarPlus } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { api } from '@/lib/api';
 
@@ -218,6 +218,11 @@ export default function AdminPage() {
   const [freezeDays, setFreezeDays] = useState('');
   const [refundModal, setRefundModal] = useState<Member | null>(null);
   const [refundReason, setRefundReason] = useState('');
+  const [extendModal, setExtendModal] = useState<Member | null>(null);
+  // Which pack is being moved, and where to. Set when the modal opens so the
+  // studio sees the date it already has rather than an empty field.
+  const [extendPackId, setExtendPackId] = useState('');
+  const [extendDate, setExtendDate] = useState('');
   const [broadcast, setBroadcast] = useState({ message: '', audience: 'active' as 'all' | 'active' | 'expiring' });
   const [broadcastBusy, setBroadcastBusy] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ sent: number; failed: number } | null>(null);
@@ -616,6 +621,32 @@ export default function AdminPage() {
       setMsg({ text: action === 'freeze' ? 'Membership frozen' : `Membership unfrozen — plan extended to ${data.new_plan_end}`, ok: true });
       fetchAll();
     } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  // Opens on the member's longest-running live pack, since that is the one a
+  // studio is usually asked about, and prefills the date it currently ends.
+  function openExtend(m: Member) {
+    const live = (m.packs || []).filter(p => p.is_live);
+    const pick = live.length ? live[live.length - 1] : (m.packs || [])[0];
+    setExtendPackId(pick?.id || '');
+    setExtendDate(pick?.expires_on || '');
+    setExtendModal(m);
+  }
+
+  async function submitExtend() {
+    if (!extendModal || !extendPackId || !extendDate) return;
+    setMemberActionBusy(extendModal.id + '-extend');
+    const res = await api(`/api/admin/members/${extendModal.id}/packs/extend`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ packId: extendPackId, newExpiresOn: extendDate }),
+    });
+    const data = res.data ?? {};
+    setMemberActionBusy(null);
+    if (data.ok) {
+      setExtendModal(null); setExtendPackId(''); setExtendDate('');
+      setMsg({ text: `${data.pack_name || 'Pack'} now runs to ${fmtDate(data.now_expires)}`, ok: true });
+      fetchAll();
+    } else setMsg({ text: data.error || 'Could not extend the pack', ok: false });
   }
 
   async function sendBroadcast(e: React.FormEvent) {
@@ -2201,6 +2232,12 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                         style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(139,122,100,.3)', color:MUTED, borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
                         <RefreshCw size={10} strokeWidth={1.5} />
                       </button>
+                      <button onClick={() => openExtend(m)} className="abtn"
+                        disabled={!(m.packs || []).length}
+                        title="Give a pack more time — move its end date out"
+                        style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(251,191,36,.3)', color:'#fbbf24', borderRadius:5, background:'none', cursor: (m.packs || []).length ? 'pointer' : 'not-allowed', opacity: (m.packs || []).length ? 1 : .4, display:'inline-flex', alignItems:'center' }}>
+                        <CalendarPlus size={10} strokeWidth={1.5} />
+                      </button>
                       <button onClick={() => setFreezeModal(m)} className="abtn"
                         title="Freeze / Unfreeze membership"
                         style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(96,165,250,.3)', color:'#60a5fa', borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
@@ -2986,6 +3023,66 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
 
       </div>
       </div>
+
+      {/* ════ EXTEND PACK MODAL ════ */}
+      {extendModal && (() => {
+        const packs = (extendModal.packs || []);
+        const chosen = packs.find(p => p.id === extendPackId);
+        return (
+        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setExtendModal(null); }}>
+          <div className="modal-box" style={{ maxWidth:400, padding:'24px' }}>
+            <div style={{ fontSize:15, fontWeight:600, color:CREAM, marginBottom:4 }}>Give a pack more time</div>
+            <div style={{ fontSize:13, color:MUTED, marginBottom:18 }}>{extendModal.name}</div>
+
+            {/* One row per pack. A member can hold several and they do not all
+                end together, so the date being changed has to be picked, not
+                assumed. */}
+            <div style={{ display:'flex', flexDirection:'column', gap:8, marginBottom:16 }}>
+              {packs.map(p => (
+                <button key={p.id} onClick={() => { setExtendPackId(p.id); setExtendDate(p.expires_on); }}
+                  style={{ textAlign:'left', minHeight:44, padding:'10px 14px', borderRadius:8, cursor:'pointer',
+                    background: p.id === extendPackId ? 'rgba(251,191,36,.10)' : 'none',
+                    border:`1px solid ${p.id === extendPackId ? 'rgba(251,191,36,.45)' : BORDER}`,
+                    color: p.id === extendPackId ? '#fbbf24' : CREAM, fontSize:13, fontWeight:500 }}>
+                  {p.name}
+                  <div style={{ fontSize:11, color:MUTED, fontWeight:400, marginTop:2 }}>
+                    {p.remaining === null ? 'unlimited' : `${p.remaining} of ${p.classes_included} left`}
+                    {' · ends '}{fmtDate(p.expires_on)}
+                    {!p.is_live && ' · expired'}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <label style={{ fontSize:11, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600 }}>
+              New end date
+            </label>
+            {/* 16px or iOS Safari zooms the page on focus. */}
+            <input type="date" value={extendDate} min={chosen?.expires_on} onChange={e => setExtendDate(e.target.value)}
+              style={{ background:DARK, border:`1px solid ${BORDER}`, borderRadius:8, padding:'12px 14px', color:CREAM, fontSize:16, width:'100%', marginTop:6, minHeight:44 }} />
+            <div style={{ fontSize:11, color:MUTED, marginTop:8, lineHeight:1.5 }}>
+              {chosen
+                ? `Currently ends ${fmtDate(chosen.expires_on)}. They keep the classes they have left — this only changes how long they have to use them.`
+                : 'Pick a pack above.'}
+            </div>
+
+            <div style={{ display:'flex', flexDirection:'column', gap:10, marginTop:18 }}>
+              <button onClick={submitExtend}
+                disabled={!extendPackId || !extendDate || (!!chosen && extendDate <= chosen.expires_on) || memberActionBusy === extendModal.id + '-extend'}
+                style={{ minHeight:44, padding:'12px', background:ORANGE, color:'#fff', border:'none', borderRadius:8, fontSize:14, fontWeight:600,
+                  cursor: (!extendPackId || !extendDate || (!!chosen && extendDate <= chosen.expires_on)) ? 'not-allowed' : 'pointer',
+                  opacity: (!extendPackId || !extendDate || (!!chosen && extendDate <= chosen.expires_on)) ? .5 : 1 }}>
+                {memberActionBusy === extendModal.id + '-extend' ? 'Extending…' : 'Extend pack'}
+              </button>
+              <button onClick={() => setExtendModal(null)}
+                style={{ minHeight:44, padding:'10px', background:'none', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:8, fontSize:13, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       {/* ════ FREEZE MODAL ════ */}
       {freezeModal && (

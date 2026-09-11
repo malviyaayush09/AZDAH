@@ -47,6 +47,26 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
     planEnd.setDate(planEnd.getDate() + days);
     const newEnd = planEnd.toISOString().split('T')[0];
 
+    // The packs have to move too. Booking is gated on member_packs.expires_on,
+    // not on plan_end, so extending plan_end alone gave back the date on screen
+    // and none of the booking it implies -- the member still could not book
+    // past the original expiry. Every pack that was live at the point of
+    // freezing gets the same number of days the member lost.
+    const { data: packs } = await db
+      .from('member_packs')
+      .select('id, expires_on')
+      .eq('member_id', params.memberId)
+      .gte('expires_on', member.plan_end);
+
+    const shifted: { id: string; from: string; to: string }[] = [];
+    for (const p of packs || []) {
+      const d = new Date((p.expires_on as string) + 'T00:00:00');
+      d.setDate(d.getDate() + days);
+      const to = d.toISOString().split('T')[0];
+      await db.from('member_packs').update({ expires_on: to }).eq('id', p.id);
+      shifted.push({ id: p.id as string, from: p.expires_on as string, to });
+    }
+
     await db.from('members')
       .update({
         is_frozen: false,
@@ -56,9 +76,11 @@ export async function POST(req: NextRequest, { params }: { params: { memberId: s
       .eq('id', params.memberId);
 
     await logAudit((admin as { phone: string }).phone, 'membership_unfrozen', 'member', params.memberId, {
-      days_extended: days, new_plan_end: newEnd,
+      days_extended: days, new_plan_end: newEnd, packs_extended: shifted,
     }).catch(() => {});
-    return NextResponse.json({ ok: true, status: 'unfrozen', new_plan_end: newEnd });
+    return NextResponse.json({
+      ok: true, status: 'unfrozen', new_plan_end: newEnd, packs_extended: shifted.length,
+    });
   }
 
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
