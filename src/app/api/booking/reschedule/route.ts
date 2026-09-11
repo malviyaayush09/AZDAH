@@ -142,13 +142,35 @@ export async function POST(req: NextRequest) {
     const same = spendable.find((p) => p.id === oldBooking.pack_id);
     if (same && packCoversCategory(same, newClass.category ?? null)) newPackId = same.id;
   }
+  let failReason: string | undefined;
+  let failExpiresOn: string | null | undefined;
   if (!newPackId) {
-    const { pack } = await pickPackForClass(db, memberId, newClass.category ?? null, newClass.class_date);
+    const { pack, reason, expiresOn } = await pickPackForClass(db, memberId, newClass.category ?? null, newClass.class_date);
     newPackId = pack?.id ?? null;
+    failReason = reason;
+    failExpiresOn = expiresOn;
   }
   if (!newPackId) {
+    if (failReason === 'expires_before_class') {
+      const ends = failExpiresOn
+        ? new Date(failExpiresOn + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })
+        : 'before that class';
+      return NextResponse.json(
+        { error: `Your pack runs until ${ends}, so it cannot cover that class. Please pick a class on or before that date, or renew.` },
+        { status: 403 },
+      );
+    }
+    if (failReason === 'exhausted') {
+      return NextResponse.json(
+        { error: 'You have used every class in your packs, so there is nothing left to move.' },
+        { status: 400 },
+      );
+    }
+    if (failReason === 'no_pack') {
+      return NextResponse.json({ error: 'Membership expired. Please renew.' }, { status: 403 });
+    }
     return NextResponse.json(
-      { error: 'No pack of yours covers that class. Please pick one your pack includes.' },
+      { error: 'That class is not included in your pack. Please pick one your pack covers.' },
       { status: 403 },
     );
   }
