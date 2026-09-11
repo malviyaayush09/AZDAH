@@ -1,5 +1,23 @@
 export const runtime = 'edge';
 
+/*
+ * This route must never be cached.
+ *
+ * Its GET takes no request argument and reads no cookies or headers, so
+ * Next.js treats it as static: the Supabase calls inside it go through the
+ * patched fetch, get cached, and the whole response freezes at the first
+ * render. The timetable then stops moving. It showed the 10 AM class on
+ * 12 September as full when two of its seven bookings had been rescheduled
+ * away and two seats were free, and at the same time showed two genuinely
+ * full classes as available -- stale in both directions, which is the
+ * signature of a frozen snapshot rather than a counting bug.
+ *
+ * /api/workshops/public already carries these two lines for the same reason.
+ * Availability is live data and has to be read on every request.
+ */
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 import { NextResponse } from 'next/server';
 import { getServiceClient } from '@/lib/supabase';
 import { todayIST, classHasStarted } from '@/lib/date';
