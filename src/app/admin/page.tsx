@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2, CalendarPlus } from 'lucide-react';
+import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2, CalendarPlus, History } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { api } from '@/lib/api';
 
@@ -11,6 +11,30 @@ type MemberPack = {
   classes_included: number | null; used: number; remaining: number | null;
   by_category?: { category: string; limit: number; used: number; remaining: number }[];
   starts_on: string; expires_on: string; is_frozen: boolean; is_live: boolean;
+};
+
+/** One member's whole record, as /api/admin/members/[id]/history returns it. */
+type MemberHistory = {
+  member: { name: string; phone: string; member_since: string; plan_end: string | null; is_active: boolean };
+  totals: {
+    paid_rupees: number; packs_bought: number;
+    classes_bought: number; classes_used: number; classes_lost_to_expiry: number;
+    attended: number; missed: number; cancelled: number; moved: number;
+    studio_cancelled: number; upcoming: number; waitlisted_now: number;
+  };
+  packs: {
+    id: string; name: string; bought_on: string; amount_paise: number;
+    classes_included: number | null; used: number; remaining: number | null;
+    lost_to_expiry: number; starts_on: string; expires_on: string;
+    state: 'live' | 'expired' | 'upcoming';
+  }[];
+  timeline: {
+    id: string; title: string; trainer: string | null;
+    class_date: string | null; start_time: string | null; booked_on: string;
+    outcome: 'attended' | 'missed' | 'past' | 'booked' | 'cancelled' | 'moved_away' | 'studio_cancelled';
+    spent_a_class: boolean; paid_by: string | null; came_from_reschedule: boolean;
+  }[];
+  waitlist: { class_id: string; title: string; class_date: string | null; start_time: string | null; is_past: boolean }[];
 };
 
 type Member = {
@@ -218,6 +242,9 @@ export default function AdminPage() {
   const [freezeDays, setFreezeDays] = useState('');
   const [refundModal, setRefundModal] = useState<Member | null>(null);
   const [refundReason, setRefundReason] = useState('');
+  const [historyFor, setHistoryFor] = useState<Member | null>(null);
+  const [history, setHistory] = useState<MemberHistory | null>(null);
+  const [historyBusy, setHistoryBusy] = useState(false);
   const [extendModal, setExtendModal] = useState<Member | null>(null);
   // Which pack is being moved, and where to. Set when the modal opens so the
   // studio sees the date it already has rather than an empty field.
@@ -621,6 +648,14 @@ export default function AdminPage() {
       setMsg({ text: action === 'freeze' ? 'Membership frozen' : `Membership unfrozen — plan extended to ${data.new_plan_end}`, ok: true });
       fetchAll();
     } else setMsg({ text: data.error || 'Failed', ok: false });
+  }
+
+  async function openHistory(m: Member) {
+    setHistoryFor(m); setHistory(null); setHistoryBusy(true);
+    const res = await api<MemberHistory>(`/api/admin/members/${m.id}/history`);
+    setHistoryBusy(false);
+    if (res.ok && res.data) setHistory(res.data);
+    else setMsg({ text: res.error || 'Could not load their history', ok: false });
   }
 
   // Opens on the member's longest-running live pack, since that is the one a
@@ -2232,6 +2267,11 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                         style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(139,122,100,.3)', color:MUTED, borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
                         <RefreshCw size={10} strokeWidth={1.5} />
                       </button>
+                      <button onClick={() => openHistory(m)} className="abtn"
+                        title="Their full history — classes, cancellations, packs"
+                        style={{ fontSize:11, padding:'5px 7px', border:'1px solid rgba(245,240,232,.25)', color:CREAM, borderRadius:5, background:'none', cursor:'pointer', display:'inline-flex', alignItems:'center' }}>
+                        <History size={10} strokeWidth={1.5} />
+                      </button>
                       <button onClick={() => openExtend(m)} className="abtn"
                         disabled={!(m.packs || []).length}
                         title="Give a pack more time — move its end date out"
@@ -3023,6 +3063,140 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
 
       </div>
       </div>
+
+      {/* ════ MEMBER HISTORY ════ */}
+      {historyFor && (() => {
+        /* Every word a member reads about their own class has to match this
+           screen, or the studio ends up arguing from a different vocabulary
+           than the member. 'rescheduled' is the database's word; nobody says
+           it out loud, so it is translated here once. */
+        const LABEL: Record<string, { text: string; colour: string }> = {
+          attended:         { text: 'Attended',            colour: '#4ade80' },
+          missed:           { text: 'Did not turn up',     colour: '#f87171' },
+          past:             { text: 'Went ahead',          colour: MUTED },
+          booked:           { text: 'Booked',              colour: ORANGE },
+          cancelled:        { text: 'Cancelled',           colour: '#fbbf24' },
+          moved_away:       { text: 'Moved to another class', colour: '#60a5fa' },
+          studio_cancelled: { text: 'Studio cancelled it', colour: MUTED },
+        };
+        const t = history?.totals;
+        const stat = (n: number | string, label: string, colour = CREAM) => (
+          <div style={{ minWidth:78 }}>
+            <div style={{ fontSize:19, fontWeight:700, color:colour, lineHeight:1.1 }}>{n}</div>
+            <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.09em', marginTop:3 }}>{label}</div>
+          </div>
+        );
+        return (
+        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) { setHistoryFor(null); setHistory(null); } }}>
+          <div className="modal-box" style={{ maxWidth:620, padding:0, maxHeight:'88vh', display:'flex', flexDirection:'column' }}>
+
+            <div style={{ padding:'20px 22px 14px', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ fontSize:16, fontWeight:600, color:CREAM }}>{historyFor.name}</div>
+              <div style={{ fontSize:12, color:MUTED, marginTop:2 }}>
+                {historyFor.phone.replace('91','+91 ')}
+                {history && <> · with the studio since {fmtDate(history.member.member_since)}</>}
+              </div>
+            </div>
+
+            <div style={{ overflowY:'auto', padding:'18px 22px 22px' }}>
+              {historyBusy || !history || !t ? (
+                <div style={{ fontSize:13, color:MUTED, padding:'30px 0', textAlign:'center' }}>
+                  {historyBusy ? 'Reading their record…' : 'Nothing to show.'}
+                </div>
+              ) : (<>
+
+                <div style={{ display:'flex', gap:20, flexWrap:'wrap', marginBottom:20 }}>
+                  {stat(`₹${t.paid_rupees.toLocaleString('en-IN')}`, 'paid in total')}
+                  {stat(`${t.classes_used}/${t.classes_bought}`, 'classes used')}
+                  {/* The number that exists nowhere else, and the one a member
+                      means when they say they lost their classes. */}
+                  {stat(t.classes_lost_to_expiry, 'expired unused', t.classes_lost_to_expiry > 0 ? '#f87171' : CREAM)}
+                  {stat(t.attended, 'attended', '#4ade80')}
+                  {stat(t.cancelled, 'cancelled', t.cancelled > 0 ? '#fbbf24' : CREAM)}
+                  {stat(t.moved, 'moved', t.moved > 0 ? '#60a5fa' : CREAM)}
+                </div>
+
+                <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600, marginBottom:8 }}>
+                  Packs bought — {history.packs.length}
+                </div>
+                {history.packs.length === 0
+                  ? <div style={{ fontSize:12.5, color:MUTED, marginBottom:18 }}>No packs on record.</div>
+                  : <div style={{ display:'flex', flexDirection:'column', gap:7, marginBottom:20 }}>
+                      {history.packs.map(p => (
+                        <div key={p.id} style={{ padding:'10px 13px', borderRadius:8, background:DARK, border:`1px solid ${BORDER}` }}>
+                          <div style={{ display:'flex', justifyContent:'space-between', gap:10, flexWrap:'wrap' }}>
+                            <span style={{ fontSize:13, fontWeight:600, color:CREAM }}>{p.name}</span>
+                            <span style={{ fontSize:12, color: p.state === 'live' ? '#4ade80' : MUTED }}>
+                              {p.state === 'live' ? 'Live' : p.state === 'upcoming' ? 'Not started' : 'Expired'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize:11.5, color:MUTED, marginTop:3, lineHeight:1.55 }}>
+                            Bought {fmtDate(p.bought_on)}
+                            {p.amount_paise > 0 && <> · ₹{(p.amount_paise/100).toLocaleString('en-IN')}</>}
+                            {' · '}{fmtDate(p.starts_on)} to {fmtDate(p.expires_on)}
+                            <br />
+                            {p.classes_included == null ? 'Unlimited' : <>Used {p.used} of {p.classes_included}</>}
+                            {p.state === 'live' && p.remaining != null && <> · {p.remaining} still to use</>}
+                            {p.lost_to_expiry > 0 && (
+                              <span style={{ color:'#f87171' }}> · {p.lost_to_expiry} expired unused</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>}
+
+                {history.waitlist.filter(w => !w.is_past).length > 0 && (<>
+                  <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600, marginBottom:8 }}>
+                    Waiting for a spot
+                  </div>
+                  <div style={{ marginBottom:20 }}>
+                    {history.waitlist.filter(w => !w.is_past).map(w => (
+                      <div key={w.class_id} style={{ fontSize:12.5, color:CREAM, padding:'3px 0' }}>
+                        {w.class_date && fmtDate(w.class_date)} {w.start_time && fmtTime(w.start_time)} · {w.title}
+                        <span style={{ color:MUTED }}> — no class taken unless a spot opens</span>
+                      </div>
+                    ))}
+                  </div>
+                </>)}
+
+                <div style={{ fontSize:10, color:MUTED, textTransform:'uppercase', letterSpacing:'.12em', fontWeight:600, marginBottom:8 }}>
+                  Every class — {history.timeline.length}
+                </div>
+                {history.timeline.length === 0
+                  ? <div style={{ fontSize:12.5, color:MUTED }}>They have never booked a class.</div>
+                  : history.timeline.map(b => {
+                      const l = LABEL[b.outcome] || LABEL.past;
+                      return (
+                        <div key={b.id} style={{ display:'flex', gap:10, alignItems:'baseline', flexWrap:'wrap', fontSize:12.5, padding:'6px 0', borderBottom:`1px solid ${BORDER}` }}>
+                          <span style={{ color:CREAM, fontWeight:600, minWidth:104 }}>{b.class_date ? fmtDate(b.class_date) : '—'}</span>
+                          <span style={{ color:ORANGE, minWidth:62 }}>{b.start_time ? fmtTime(b.start_time) : ''}</span>
+                          <span style={{ color:CREAM, flex:1, minWidth:120 }}>
+                            {b.title}
+                            {b.came_from_reschedule && <span style={{ color:'#60a5fa', fontSize:11 }}> · moved here</span>}
+                          </span>
+                          <span style={{ color:l.colour, fontSize:11.5, fontWeight:600 }}>{l.text}</span>
+                          {/* Whether the class was actually spent is the thing
+                              being argued about, so it is said plainly rather
+                              than left to be inferred from the status. */}
+                          <span style={{ color:MUTED, fontSize:11, minWidth:96, textAlign:'right' }}>
+                            {b.spent_a_class ? (b.paid_by ? `used · ${b.paid_by}` : 'used a class') : 'no class used'}
+                          </span>
+                        </div>
+                      );
+                    })}
+              </>)}
+            </div>
+
+            <div style={{ padding:'12px 22px', borderTop:`1px solid ${BORDER}` }}>
+              <button onClick={() => { setHistoryFor(null); setHistory(null); }}
+                style={{ minHeight:44, width:'100%', padding:'11px', background:'none', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:8, fontSize:13, cursor:'pointer' }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       {/* ════ EXTEND PACK MODAL ════ */}
       {extendModal && (() => {
