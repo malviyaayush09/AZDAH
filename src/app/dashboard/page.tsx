@@ -379,6 +379,27 @@ export default function DashboardPage() {
    * 2 Oct, so this is the screen a good part of the studio is about to see.
    */
   const packExpired = !!member && livePacks.length === 0;
+  /*
+   * What is on beyond the week on screen.
+   *
+   * The grid opens on the current week, and until now the only thing that ever
+   * mentioned a later week was the empty-state line -- which appears only when
+   * THIS week has nothing at all. So a member looking at a week that does have
+   * classes was given no sign that more existed. The studio published a class
+   * eight days out, announced it, and had ten members message to say they could
+   * not see it: it was one arrow press away and nothing said so.
+   */
+  const weekEndStr=toYMD(weekDays[6]);
+  const laterClasses=visibleClasses.filter(c=>c.class_date>weekEndStr);
+  const nextLaterDay=laterClasses.length?laterClasses.map(c=>c.class_date).sort()[0]:null;
+  // How many weeks forward that day sits, measured Monday to Monday so a jump
+  // always lands on the week that holds it.
+  const weeksToNextLater=(()=>{
+    if(!nextLaterDay) return 0;
+    const d=new Date(nextLaterDay+'T00:00:00');
+    d.setDate(d.getDate()-((d.getDay()+6)%7));
+    return Math.round((d.getTime()-weekStart.getTime())/(7*86400000));
+  })();
   const weekLabel=(()=>{const a=weekDays[0],b=weekDays[6];
     const f=(d:Date,y:boolean)=>d.toLocaleDateString('en-IN',{month:'short',...(y?{year:'numeric'}:{})});
     return a.getMonth()===b.getMonth()?`${a.getDate()} – ${b.getDate()} ${f(b,true)}`:`${a.getDate()} ${f(a,false)} – ${b.getDate()} ${f(b,true)}`;})();
@@ -743,6 +764,23 @@ export default function DashboardPage() {
                     <button onClick={()=>setWeekOffset(0)} style={{background:'none',border:'none',color:ORANGE,fontSize:12.5,textDecoration:'underline',cursor:'pointer'}}>This week</button>
                   )}
                 </div>
+
+                {/* Says out loud that the timetable continues. Without it the
+                    only way to learn there are later classes is to press an
+                    arrow on the chance that something is behind it. */}
+                {nextLaterDay&&(
+                  <button onClick={()=>setWeekOffset(w=>w+weeksToNextLater)}
+                    style={{display:'flex',alignItems:'center',gap:8,width:'100%',minHeight:44,marginBottom:18,
+                      padding:'11px 14px',borderRadius:8,cursor:'pointer',textAlign:'left',
+                      background:`${ORANGE}0e`,border:`1px solid ${ORANGE}38`,color:ORANGE,fontSize:13,fontWeight:500}}>
+                    <span style={{flex:1}}>
+                      <strong>{laterClasses.length} more {laterClasses.length===1?'class':'classes'}</strong>
+                      {' coming up, from '}
+                      {new Date(nextLaterDay+'T00:00:00').toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'})}
+                    </span>
+                    <span aria-hidden="true">→</span>
+                  </button>
+                )}
 
                 {/* Trainer pills */}
                 {trainers.length>1&&(

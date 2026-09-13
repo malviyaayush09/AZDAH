@@ -50,6 +50,13 @@ export async function api<T = any>(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
+      // Never read one of these from the browser's own cache. Everything this
+      // app fetches is live -- seats left, what a member has booked, what is on
+      // the timetable -- and fetch's default mode lets the browser reuse a
+      // response that carries no freshness information. That showed members a
+      // timetable from their previous visit, so a class published in the
+      // morning did not exist for them.
+      cache: 'no-store',
       ...rest,
       ...(json !== undefined
         ? {
