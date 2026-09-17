@@ -130,12 +130,12 @@ export async function sendWaitlistPromoted(phone: string, name: string, classNam
   await sendTemplate(phone, 'azdah_waitlist_promoted', [name, className, dateFmt, timeFmt]);
 }
 
-// ─── Admin 2FA OTP ────────────────────────────────────────────
-// Template: azdah_admin_otp
-// Variables: {{1}} = OTP code
-export async function sendAdminOtp(phone: string, otp: string) {
-  await sendTemplate(phone, 'azdah_admin_otp', [otp]);
-}
+// The admin OTP sender that sat here is gone along with /api/auth/verify-otp.
+// Nothing ever called either of them: an OTP login was started once and
+// abandoned, leaving a route that issued an admin session to whoever presented
+// a matching code. When the WhatsApp login is built properly it will use a
+// hashed-code table and check the phone belongs to the admin, so nothing here
+// was worth keeping.
 
 // ─── Send reschedule confirmation ────────────────────────────
 // Template: azdah_reschedule_confirmed
