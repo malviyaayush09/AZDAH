@@ -92,23 +92,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Cannot reschedule to a class that has already started' }, { status: 400 });
   }
 
-  // Tier gate — the target class must be one the member's pack covers.
-  // Without this, someone on a cheaper pack could book a class they ARE
-  // entitled to and then reschedule into a premium one.
-  if (memberData.plan_id) {
-    const { data: planData } = await db
-      .from('membership_plans')
-      .select('allowed_categories')
-      .eq('id', memberData.plan_id)
-      .single();
-    if (planData?.allowed_categories && planData.allowed_categories.length && newClass.category
-        && !planData.allowed_categories.includes(newClass.category)) {
-      return NextResponse.json(
-        { error: 'That class is not included in your pack. Please pick one your pack covers.' },
-        { status: 403 }
-      );
-    }
-  }
+  /*
+   * The tier gate that used to sit here is gone. It asked the wrong question
+   * and refused members who had paid.
+   *
+   * It read members.plan_id -- ONE plan -- and rejected the target class when
+   * that plan's allowed_categories did not list its category. But plan_id
+   * names only the PRIMARY pack, the one expiring last. A member holding a
+   * Pole pack and a Mobility pack has plan_id pointing at whichever runs
+   * longer, so with Mobility primary every Pole class was refused with "That
+   * class is not included in your pack" -- while the member held an unexpired
+   * Pole pack with classes still on it.
+   *
+   * Seven active members hold more than one pack. Six could not reschedule
+   * into a discipline they had paid for. Because the timetable they are shown
+   * is filtered by the UNION of their packs, the class was visible, offered,
+   * and then refused on click. That is what made the flow look broken to them:
+   * it showed, then it said no.
+   *
+   * Nothing is lost by removing it. pickPackForClass below must still find a
+   * pack that covers this category, is valid on the class date, and has a
+   * class left -- so the tier is still enforced, per pack, which is the only
+   * level at which it was ever true. The gate was wrong AND redundant.
+   * booking/create made this move when packs became per-discipline; this route
+   * was missed.
+   */
 
   // Check new class capacity
   const { data: countData } = await db.rpc('class_booking_count', { class_uuid: newClassId });

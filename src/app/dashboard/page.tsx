@@ -277,7 +277,13 @@ export default function DashboardPage() {
     const r = await api('/api/booking/reschedule', { json: { oldBookingId: oldId, newClassId: newId } });
     setBusyId(null);
     if (r.ok) { setMsg({text:'Rescheduled!',ok:true}); setRescheduleMode(null); setTab('my-bookings'); fetchAll(); }
-    else setMsg({ text: r.error!, ok: false });
+    else {
+      setMsg({ text: r.error!, ok: false });
+      // Whatever the reason, what is on screen is now suspect -- most often the
+      // class filled while they were choosing. Refresh so the next attempt is
+      // made against the real timetable rather than the same stale one.
+      fetchAll();
+    }
   }
 
   async function toggleWaitlist(cls: ClassSlot) {
@@ -846,10 +852,23 @@ export default function DashboardPage() {
 
                                     {isReschedTarget?(
                                       !isBooked&&!isFull?(
+                                        /* Booking mode refuses to offer a class no pack of
+                                           theirs can pay for. Reschedule mode did not, and
+                                           offered "Move here" on classes past the end of the
+                                           pack -- which the server then refused. A member
+                                           moving a class was shown a row of buttons, most of
+                                           which failed, and reported the site as glitchy.
+                                           Same guard, same words, both modes. */
+                                        packEndsBefore?(
+                                          <div style={{fontSize:10,color:'#fbbf24',textAlign:'center',padding:'6px 0',lineHeight:1.3}}>
+                                            Pack ends<br />{fmtShortDate(packEndsBefore)}
+                                          </div>
+                                        ):(
                                         <button className="book-btn wk-act" disabled={busyId===cls.id} onClick={()=>rescheduleClass(rescheduleMode!,cls.id)}
                                           style={{background:'#2563eb',color:'#fff'}}>
                                           {busyId===cls.id?'Moving…':'Move here'}
                                         </button>
+                                        )
                                       ):null
                                     ):!isBooked&&!isFull?(
                                       // Offering "Book" to someone with no credits left just
@@ -935,7 +954,12 @@ export default function DashboardPage() {
                               </span>
                             )}
                             {!classHasStarted(cls.class_date,cls.start_time)&&!member!.reschedule_used&&!rescheduleMode&&(
-                              <button onClick={()=>{setRescheduleMode(cls.my_booking_id!);setTab('book');}}
+                              // fetchAll re-reads the timetable on the way in. The list
+                              // was fetched when the page loaded and the studio's
+                              // classes fill up, so a member choosing where to move was
+                              // being offered a seat somebody else had taken minutes
+                              // earlier, and then refused.
+                              <button onClick={()=>{setRescheduleMode(cls.my_booking_id!);setTab('book');fetchAll();}}
                                 style={{padding:'8px 14px',fontSize:12,background:'none',border:`1px solid ${ORANGE}`,color:ORANGE,borderRadius:8,cursor:'pointer',fontWeight:500}}
                                 onMouseOver={e=>e.currentTarget.style.background=`${ORANGE}12`} onMouseOut={e=>e.currentTarget.style.background='none'}>
                                 Reschedule
