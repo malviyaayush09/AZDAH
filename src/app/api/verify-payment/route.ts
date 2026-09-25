@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
   // 6. Calculate membership dates
   const startDate = new Date();
   const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 40);
+  endDate.setDate(endDate.getDate() + 35);
   const toDate = (d: Date) => d.toISOString().split('T')[0];
 
   // 7. New member, or an existing one buying another pack?
