@@ -28,31 +28,6 @@ export type MemberPack = {
 
 export type CategoryUsage = { category: string; limit: number; used: number; remaining: number };
 
-
-// ──────────────────────────────────────────────────────────────────────
-// 🎃 PROMOTION – extra week for October 2026
-//   • Applies to *duration‑based* packs (classes_included === null)
-//   • Valid from 2026‑10‑01 through 2026‑11‑02 (inclusive)
-//   • Adds 4 days to the pack’s expiry date when checking validity
-//   • Remove this whole block after 2026‑11‑02
-// ───────────────────────────────────────────────────────────────────────
-const PROMO_START = '2026-10-01';   // inclusive
-const PROMO_END   = '2026-11-02';   // inclusive
-const PROMO_EXTRA_DAYS = 4;
-
-/** Is the given day (YYYY‑MM‑DD) inside the promotion window? */
-function isPromotionDay(day: string): boolean {
-  return day >= PROMO_START && day <= PROMO_END;
-}
-
-/** Add `n` days to a YYYY‑MM‑DD string and return the new string. */
-function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T00:00:00'); // treat as UTC midnight – safe because we only compare dates
-  d.setDate(d.getDate() + n);
-  return d.toISOString().slice(0, 10);      // back to YYYY‑MM‑DD
-}
-// ───────────────────────────────────────────────────────────────────────
-
 export type PackWithUsage = MemberPack & {
   used: number;
   /** null when the pack has no class limit (duration-based). */
@@ -209,35 +184,17 @@ export async function getSpendablePacks(
   onDate?: string,
 ): Promise<MemberPack[]> {
   await ensurePackForLegacyMember(db, memberId);
-  const day = onDate ?? todayIST();
-
-  // Fetch all packs that have started and are not frozen.
-  // We’ll do the expiry check in JavaScript so we can apply the promotion.
+  const day = onDate || todayIST();
   const { data } = await db
     .from('member_packs')
-    .select(
-      'id, plan_id, plan_name, classes_included, allowed_categories, category_limits, starts_on, expires_on, is_frozen'
-    )
+    .select('id, plan_id, plan_name, classes_included, allowed_categories, category_limits, starts_on, expires_on, is_frozen')
     .eq('member_id', memberId)
     .eq('is_frozen', false)
     .lte('starts_on', day)
+    .gte('expires_on', day)
     .order('expires_on', { ascending: true });
 
-  const packs = (data || []) as MemberPack[];
-
-  // No promotion → simple expiry test
-  if (!isPromotionDay(day)) {
-    return packs.filter(p => day <= p.expires_on);
-  }
-
-  // Promotion active → adjust expiry for duration‑based packs
-  return packs.filter(p => {
-    const effectiveExpiry =
-      p.classes_included === null            // duration‑based pack
-        ? addDays(p.expires_on, PROMO_EXTRA_DAYS)   // add the extra week
-        : p.expires_on;                         // count‑based pack uses its original expiry
-    return day <= effectiveExpiry;
-  });
+  return (data || []) as MemberPack[];
 }
 
 /** Every pack the member holds, spendable or not, with usage filled in. */
