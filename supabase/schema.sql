@@ -99,7 +99,7 @@ create policy "intents_service_only" on payment_intents for all using (false);
 -- ─── Seed membership plans ────────────────────────────────────
 insert into membership_plans (name, duration_days, price_paise, sessions_per_week, features, sort_order)
 values
-  ('Monthly',     30,  150000, 6, ARRAY['6 sessions/week','Locker access','Progress tracking'], 1),
+  ('Monthly',     40,  150000, 6, ARRAY['6 sessions/week','Locker access','Progress tracking'], 1),
   ('Quarterly',   90,  400000, 6, ARRAY['6 sessions/week','Locker access','Progress tracking','₹500 savings'], 2),
   ('Half-Yearly', 180, 700000, 6, ARRAY['6 sessions/week','Locker access','Progress tracking','₹2000 savings','Free diet plan'], 3),
   ('Annual',      365, 1200000,6, ARRAY['6 sessions/week','Locker access','Progress tracking','₹6000 savings','Free diet plan','Priority booking'], 4);
