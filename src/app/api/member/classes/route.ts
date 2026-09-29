@@ -36,11 +36,15 @@ export async function GET(req: NextRequest) {
 
   const [classRes, bookingRes, waitlistRes] = await Promise.all([
     classQuery,
-    db.from('bookings').select('id, class_id, status').eq('member_id', memberId).eq('status', 'confirmed'),
+    // created_at comes back so the screen can tell whether a booking is still
+    // inside the fifteen-minute grace window. Without it the cancel dialog had
+    // to warn that the class would be used up even when it was about to come
+    // straight back, which is the opposite of what happens.
+    db.from('bookings').select('id, class_id, status, created_at').eq('member_id', memberId).eq('status', 'confirmed'),
     db.from('waitlist').select('class_id').eq('member_id', memberId),
   ]);
 
-  const bookingMap = new Map((bookingRes.data || []).map((b) => [b.class_id, { id: b.id, status: b.status }]));
+  const bookingMap = new Map((bookingRes.data || []).map((b) => [b.class_id, { id: b.id, status: b.status, created_at: b.created_at }]));
   const waitlistSet = new Set((waitlistRes.data || []).map((w) => w.class_id));
 
   // Booking counts stay server-side — members only ever see a binary "full".
@@ -68,6 +72,7 @@ export async function GET(req: NextRequest) {
       is_full: bookedCount >= cls.capacity,
       my_booking_id: booking?.id || null,
       my_booking_status: booking?.status || null,
+      my_booked_at: booking?.created_at || null,
       on_waitlist: waitlistSet.has(cls.id),
     };
   });

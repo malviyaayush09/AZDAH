@@ -27,6 +27,9 @@ type ClassSlot = {
   category?: string | null;
   is_full: boolean;
   my_booking_id: string | null; my_booking_status: string | null;
+  // When the booking was made, so the cancel dialog can say whether the class
+  // will come back or be used up. Null for a class they have not booked.
+  my_booked_at?: string | null;
   on_waitlist?: boolean;
 };
 type HistoryItem = {
@@ -84,6 +87,9 @@ export default function DashboardPage() {
   const [msg, setMsg]               = useState<{text:string;ok:boolean}|null>(null);
   const [rescheduleMode, setRescheduleMode] = useState<string|null>(null);
   const [busyId, setBusyId]         = useState<string|null>(null);
+  // The class a member has asked to cancel, held while they confirm. Rendered
+  // by the app rather than by window.confirm, which iPhones can suppress.
+  const [cancelling, setCancelling] = useState<ClassSlot|null>(null);
   const [selectedDate, setSelectedDate] = useState<string>(toYMD(new Date()));
   // The booking screen used to show one day at a time behind a date strip,
   // which made planning a week impossible — the studio's own complaint.
@@ -256,8 +262,20 @@ export default function DashboardPage() {
     if (r.ok) fetchAll();
   }
 
+  /*
+   * Cancelling used to open with window.confirm().
+   *
+   * On iPhone that dialog does not always appear -- pop-up blocking, or a
+   * standalone/in-app browser -- and when it does not appear it returns false.
+   * The handler then returned immediately: no request, no error, no message.
+   * The button was simply dead, with nothing on screen to say why. A member hit
+   * exactly this, tapped Cancel within a minute of booking by mistake, and had
+   * to message the studio, who removed her from the class by hand.
+   *
+   * Every other confirmation in this app is rendered by the app. This was the
+   * only one handed to the browser, so it is the only one that could vanish.
+   */
   async function cancelBooking(bookingId: string) {
-    if (!confirm('Cancel this booking? The spot will be freed for others.')) return;
     setMsg(null); setBusyId(bookingId);
     const r = await api('/api/booking/cancel', { json: { bookingId } });
     setBusyId(null);
@@ -966,7 +984,7 @@ export default function DashboardPage() {
                               </button>
                             )}
                             {!pastNotice(cls.class_date,cls.start_time)&&
-                            <button disabled={busyId===cls.my_booking_id} onClick={()=>cancelBooking(cls.my_booking_id!)}
+                            <button disabled={busyId===cls.my_booking_id} onClick={()=>setCancelling(cls)}
                               style={{padding:'8px 14px',fontSize:12,background:'none',border:'1px solid rgba(248,113,113,.3)',color:'#f87171',borderRadius:8,cursor:'pointer',opacity:busyId===cls.my_booking_id?.5:1}}>
                               {busyId===cls.my_booking_id?'…':'Cancel'}
                             </button>}
@@ -1171,6 +1189,50 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ════ CANCEL CONFIRMATION ════
+          Rendered by the app, so it cannot be suppressed the way the browser's
+          own dialog was. It also tells the member which of the two outcomes
+          they are about to get, which window.confirm never could: its wording
+          warned that the spot would be freed for others even when the class was
+          about to come straight back. */}
+      {cancelling&&(()=>{
+        const bookedAgoMin = cancelling.my_booked_at
+          ? (Date.now()-new Date(cancelling.my_booked_at).getTime())/60000
+          : null;
+        // Same fifteen minutes the cancel route applies. If we cannot tell how
+        // old the booking is, assume the class is spent -- the cautious way to
+        // be wrong, since it never promises back something it cannot return.
+        const comesBack = bookedAgoMin !== null && bookedAgoMin < 15;
+        return (
+        <div className="modal-bg" onClick={e=>{if(e.target===e.currentTarget)setCancelling(null);}}>
+          <div className="modal-card" style={{padding:'24px',maxWidth:400}}>
+            <div style={{fontSize:16,fontWeight:600,color:CREAM,marginBottom:6}}>Cancel this class?</div>
+            <div style={{fontSize:13,color:MUTED,marginBottom:4}}>
+              {cancelling.title} · {dateLabel(cancelling.class_date,todayStr)} · {fmtTime(cancelling.start_time)}
+            </div>
+            <div style={{fontSize:13,lineHeight:1.55,margin:'14px 0 20px',padding:'11px 13px',borderRadius:8,
+              background: comesBack ? 'rgba(74,222,128,.08)' : 'rgba(251,191,36,.08)',
+              border: `1px solid ${comesBack ? 'rgba(74,222,128,.28)' : 'rgba(251,191,36,.28)'}`,
+              color: comesBack ? '#4ade80' : '#fbbf24'}}>
+              {comesBack
+                ? 'You booked this a few minutes ago, so the class goes straight back onto your pack. Nothing is lost.'
+                : 'This class will be counted against your pack. Your place is freed for someone else, but the class will not come back.'}
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:9}}>
+              <button onClick={()=>{const id=cancelling.my_booking_id!;setCancelling(null);cancelBooking(id);}}
+                style={{minHeight:44,padding:'12px',background:'#f87171',color:'#fff',border:'none',borderRadius:8,fontSize:14,fontWeight:600,cursor:'pointer'}}>
+                {comesBack?'Yes, cancel and give it back':'Yes, cancel this class'}
+              </button>
+              <button onClick={()=>setCancelling(null)}
+                style={{minHeight:44,padding:'11px',background:'none',border:`1px solid ${BORDER}`,color:MUTED,borderRadius:8,fontSize:13,cursor:'pointer'}}>
+                Keep my booking
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       <Toast msg={msg} onClose={()=>setMsg(null)} />
     </main>
