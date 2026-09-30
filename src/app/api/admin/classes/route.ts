@@ -21,22 +21,67 @@ export async function GET(req: NextRequest) {
   const db = getServiceClient();
   const today = todayIST();
 
+  /*
+   * Classes that have already happened are part of the studio's records.
+   *
+   * This started at `class_date >= today`, so the calendar's Prev button led
+   * to empty weeks and there was no way to check what had actually run, who
+   * had been in it, or who had attended. The studio asked for exactly this --
+   * "it's needed for our records, I need to be able to cross check" -- and was
+   * clear it is for the admin only. The member view already drops finished
+   * classes of its own accord, so nothing changes for them.
+   *
+   * `from` is accepted so the window can be widened later without another
+   * deploy. The default reaches back ninety days, which covers the studio's
+   * whole history today and keeps the response bounded as the timetable grows.
+   */
+  const fromParam = req.nextUrl.searchParams.get('from');
+  const defaultFrom = (() => {
+    const d = new Date(today + 'T00:00:00');
+    d.setDate(d.getDate() - 90);
+    return d.toISOString().split('T')[0];
+  })();
+  const from = fromParam && /^\d{4}-\d{2}-\d{2}$/.test(fromParam) ? fromParam : defaultFrom;
+
   const { data: classes } = await db
     .from('classes')
     .select('id, title, trainer_name, class_date, start_time, end_time, capacity, is_cancelled')
-    .gte('class_date', today)
+    .gte('class_date', from)
     .order('class_date', { ascending: true })
     .order('start_time', { ascending: true });
 
-  // Fetch booking counts
-  const enriched = await Promise.all(
-    (classes || []).map(async (cls) => {
-      const { data: count } = await db.rpc('class_booking_count', { class_uuid: cls.id });
-      return { ...cls, booked_count: count || 0 };
-    })
-  );
+  const list = classes || [];
 
-  return NextResponse.json({ classes: enriched });
+  /*
+   * Booking counts in one query, not one per class.
+   *
+   * This ran an RPC per class inside Promise.all. At sixty upcoming classes
+   * that was sixty round trips on every load of the admin panel; including the
+   * past would have made it two hundred and sixty, growing with every cycle
+   * the studio publishes. Edge functions have a subrequest ceiling, so that
+   * was a wall with a date on it rather than a slow page.
+   *
+   * The same shape classes/public already uses: one read, counted here.
+   */
+  const ids = list.map((c) => c.id);
+  const { data: booked } = ids.length
+    ? await db.from('bookings').select('class_id').eq('status', 'confirmed').in('class_id', ids)
+    : { data: [] as { class_id: string }[] };
+
+  const countByClass = new Map<string, number>();
+  for (const b of booked || []) {
+    countByClass.set(b.class_id, (countByClass.get(b.class_id) || 0) + 1);
+  }
+
+  const enriched = list.map((cls) => ({
+    ...cls,
+    booked_count: countByClass.get(cls.id) || 0,
+    // Said once here so every view agrees on what "already happened" means,
+    // rather than each one comparing dates its own way.
+    is_past: (cls.class_date as string) < today,
+  }));
+
+  return NextResponse.json({ classes: enriched, from });
 }
 
 export async function POST(req: NextRequest) {

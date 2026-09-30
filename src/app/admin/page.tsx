@@ -61,6 +61,10 @@ type ClassSlot = {
   id: string; title: string; trainer_name: string | null;
   class_date: string; start_time: string; end_time: string;
   capacity: number; booked_count: number; is_cancelled: boolean;
+  // Set by the API rather than worked out per view, so every screen agrees on
+  // what counts as already happened. Classes before today are records now:
+  // they are shown so the studio can cross-check what ran and who was in it.
+  is_past?: boolean;
 };
 
 type AdminStats = { total_members: number; active_members: number; expiring_soon: number };
@@ -1858,14 +1862,26 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                       const dur = durationOf(cls.start_time, cls.end_time);
                       return (
                         <article key={cls.id} className="drow" onClick={() => openClassModal(cls)}
-                          style={{ borderLeft:'3px solid ' + tone }}>
+                          /* A class that has already run is a record, not
+                             something still to fill. Dimmed so a week of
+                             history cannot be mistaken for a week of work. */
+                          style={{ borderLeft:'3px solid ' + tone, opacity: cls.is_past ? .62 : 1 }}>
                           <div>
                             <div style={{ fontSize:16, fontWeight:700, color:CREAM, letterSpacing:'-.01em' }}>{fmtTime(cls.start_time)}</div>
                             {dur && <div style={{ fontSize:11.5, color:MUTED, marginTop:2 }}>{dur}</div>}
                           </div>
 
                           <div style={{ minWidth:0 }}>
-                            <div style={{ fontSize:15.5, fontWeight:600, color:CREAM, marginBottom:3 }}>{cls.title}</div>
+                            <div style={{ fontSize:15.5, fontWeight:600, color:CREAM, marginBottom:3 }}>
+                              {cls.title}
+                              {cls.is_past && (
+                                <span style={{ marginLeft:8, fontSize:10, fontWeight:600, letterSpacing:'.1em',
+                                  textTransform:'uppercase', color:MUTED, border:`1px solid ${BORDER}`,
+                                  borderRadius:999, padding:'2px 8px', verticalAlign:'middle' }}>
+                                  Done
+                                </span>
+                              )}
+                            </div>
                             <div style={{ fontSize:12.5, color:MUTED }}>{cls.trainer_name?.trim() || 'No instructor set'}</div>
                             {bs.length > 0 && (
                               <div style={{ display:'flex', flexWrap:'wrap', gap:'5px 6px', marginTop:11 }}>
@@ -1932,7 +1948,11 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                           const full = cls.booked_count >= cls.capacity;
                           return (
                             <div key={cls.id} className="lrow" onClick={() => openClassModal(cls)}
-                              style={{ borderLeft:`3px solid ${tc}` }}>
+                              /* List is the view the studio cross-checks in --
+                                 it is the one that shows every name. Past rows
+                                 are dimmed rather than hidden: they are the
+                                 record being checked. */
+                              style={{ borderLeft:`3px solid ${tc}`, opacity: cls.is_past ? .62 : 1 }}>
                               <span style={{ fontSize:12, color:ORANGE, fontWeight:600 }}>{fmtTime(cls.start_time)}</span>
                               <span style={{ fontSize:12.5, color:CREAM, fontWeight:500 }}>{cls.title}</span>
                               <span style={{ fontSize:11.5, color:tc, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
