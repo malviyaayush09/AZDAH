@@ -107,10 +107,31 @@ export async function POST(req: NextRequest) {
   const name = intent.name as string;
   const email = (intent.email as string | null) || null;
 
-  // 6. Calculate membership dates
+  /*
+   * 6. How long the pack lasts — read from the plan, never hardcoded here.
+   *
+   * This line held `+ 36` for every plan. It was put there to solve a real
+   * problem: October has five weeks, and a 30-day pack bought at the start of
+   * the month ran out before the month did. But applying one number to every
+   * plan broke the plans that are deliberately longer -- Self Practice 8
+   * Sessions sells as 60 days and 12 Sessions as 90, and either would have
+   * granted 36. Nobody had bought one since the change, so nobody was short
+   * changed, but the next buyer would have been.
+   *
+   * It also disagreed with the other half of the system:
+   * webhooks/razorpay -- the path that finishes the purchase when the member's
+   * browser closes or loses signal -- kept using plan.duration_days. So the
+   * same pack granted 36 days or 30 depending on how the payment happened to
+   * confirm. And the homepage advertises `valid {duration_days} days`, so what
+   * a member was told and what they got did not match either.
+   *
+   * One source of truth: the plan row. Changing how long a pack lasts is now a
+   * value in the database rather than an edit to this file, which is what it
+   * should have been -- the studio's decision, not a deploy.
+   */
   const startDate = new Date();
   const endDate = new Date(startDate);
-  endDate.setDate(endDate.getDate() + 36);
+  endDate.setDate(endDate.getDate() + plan.duration_days);
   const toDate = (d: Date) => d.toISOString().split('T')[0];
 
   // 7. New member, or an existing one buying another pack?
