@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2, CalendarPlus, History } from 'lucide-react';
+import { Users, CheckCircle2, Clock, CalendarDays, Search, Download, MessageCircle, TrendingUp, BarChart3, RefreshCw, Snowflake, RotateCcw, Send, Trash2, CalendarPlus, History, UserPlus } from 'lucide-react';
 import { Toast } from '@/components/Toast';
 import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 
 type MemberPack = {
   id: string; name: string;
@@ -1105,6 +1106,58 @@ export default function AdminPage() {
   // A member's own dates, fetched once per member and kept.
   // Only offered where nothing would be destroyed; the server checks again.
   const [orphanBusy, setOrphanBusy] = useState<string | null>(null);
+  /* Adding a member by hand. The studio needs this for two things the system
+     had no door for: a stuck payment where the money arrived but the account
+     never did, and giving somebody a free place -- which a 100% promo code
+     cannot do, because Razorpay refuses an order of zero rupees. */
+  type AddMemberForm = { name:string; phone:string; email:string; planId:string;
+    startsOn:string; paid:boolean; amount:string; paymentRef:string; note:string };
+  const [addMember, setAddMember] = useState<AddMemberForm | null>(null);
+  const [addBusy, setAddBusy] = useState(false);
+  const [addResult, setAddResult] = useState<{ name:string; phone:string; pack:string;
+    expires_on:string; password:string|null; existing_member:boolean } | null>(null);
+  const [plans, setPlans] = useState<{ id:string; name:string; duration_days:number;
+    classes_included:number|null; price_paise:number|null }[]>([]);
+
+  // Plans for the Add-member picker. Read with the anon key exactly as the
+  // public plans page does -- membership_plans is already readable there, so
+  // this needs no new endpoint.
+  useEffect(() => {
+    if (!addMember || plans.length) return;
+    supabase.from('membership_plans').select('id, name, duration_days, classes_included, price_paise')
+      .eq('is_active', true).order('sort_order')
+      .then(({ data }) => setPlans(data || []));
+  }, [addMember, plans.length]);
+
+  async function submitAddMember() {
+    if (!addMember) return;
+    setAddBusy(true); setMsg(null);
+    const res = await api('/api/admin/members/create', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: addMember.name,
+        phone: addMember.phone,
+        email: addMember.email || undefined,
+        planId: addMember.planId,
+        startsOn: addMember.startsOn,
+        // Only sent when the studio says money actually changed hands, so a
+        // free place does not quietly land in the revenue figures.
+        amountPaise: addMember.paid && addMember.amount ? Math.round(parseFloat(addMember.amount) * 100) : 0,
+        razorpayPaymentId: addMember.paid && addMember.paymentRef ? addMember.paymentRef : undefined,
+        note: addMember.note || undefined,
+      }),
+    });
+    const data = res.data ?? {};
+    setAddBusy(false);
+    if (!res.ok || !data.success) { setMsg({ text: data.error || 'Could not add the member', ok: false }); return; }
+    setAddMember(null);
+    setAddResult(data);
+    fetchAll();
+  }
+
+  // Which orphan row is asking "are you sure" — hiding one is easy to do by
+  // accident and leaves a paying member locked out with the warning gone.
+  const [orphanConfirm, setOrphanConfirm] = useState<string | null>(null);
 
   // The warning goes away on its own once the account exists or the payment is
   // refunded. This is for the third case: already sorted out some other way.
@@ -1360,10 +1413,17 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
             <button onClick={() => dismissAlert({ orphans: memberOrphans.length })}
               style={{ float:'right', marginTop:-22, background:'none', border:'none', color:MUTED, fontSize:16, cursor:'pointer', padding:'2px 4px', minHeight:32 }}
               title="Hide until another one appears">×</button>
+            {/* This used to say "create the member manually and share their
+                login" -- an instruction nobody could follow, because the panel
+                has no way to create a member without a payment. The only
+                button hides the warning, which reads as fixing it. A member
+                paid on 1 October, the warning was dismissed, and she still
+                could not log in two days later. Say what is actually true. */}
             <div style={{ fontSize:12, color:'#d99', marginBottom:12, lineHeight:1.5 }}>
-              Razorpay captured the money but the member was never set up — usually the browser closed mid-payment.
-              Either create the member manually and share their login, or refund the payment in Razorpay.
-              This clears itself once the account exists or the payment is refunded.
+              Razorpay has their money but no account exists — usually the browser closed mid-payment.
+              <b style={{ color:'#f87171' }}> They cannot log in, and nothing here fixes that on its own.</b>{' '}
+              Refund them in Razorpay, or get them set up and have them pay again. This clears by itself once
+              an account exists for that number, or once the payment is refunded.
             </div>
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {memberOrphans.map(o => (
@@ -1380,11 +1440,29 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                     style={{ marginLeft:'auto', fontSize:11, fontWeight:600, color:'#4ade80', border:'1px solid rgba(74,222,128,.3)', borderRadius:5, padding:'5px 10px', textDecoration:'none' }}>
                     WhatsApp them
                   </a>
-                  <button onClick={() => resolveOrphan(o)} disabled={orphanBusy === o.order_id}
-                    title="Hide this warning — the payment is untouched"
-                    style={{ fontSize:11, fontWeight:600, color:MUTED, border:`1px solid ${BORDER}`, borderRadius:5, padding:'5px 10px', background:'none', cursor:'pointer' }}>
-                    {orphanBusy === o.order_id ? '…' : 'Already handled'}
-                  </button>
+                  {/* Two steps on purpose. "Already handled" was one click and
+                      sounded like it did something; it only ever hid the row. */}
+                  {orphanConfirm === o.order_id ? (
+                    <span style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <span style={{ fontSize:11, color:'#fbbf24' }}>
+                        This only hides the warning — they still cannot log in.
+                      </span>
+                      <button onClick={() => { setOrphanConfirm(null); resolveOrphan(o); }} disabled={orphanBusy === o.order_id}
+                        style={{ fontSize:11, fontWeight:600, color:'#fbbf24', border:'1px solid rgba(251,191,36,.4)', borderRadius:5, padding:'5px 10px', background:'none', cursor:'pointer' }}>
+                        {orphanBusy === o.order_id ? '…' : 'Hide it anyway'}
+                      </button>
+                      <button onClick={() => setOrphanConfirm(null)}
+                        style={{ fontSize:11, color:MUTED, border:`1px solid ${BORDER}`, borderRadius:5, padding:'5px 10px', background:'none', cursor:'pointer' }}>
+                        Keep it
+                      </button>
+                    </span>
+                  ) : (
+                    <button onClick={() => setOrphanConfirm(o.order_id)}
+                      title="Removes the warning from this page. It does not create their account or refund them."
+                      style={{ fontSize:11, fontWeight:600, color:MUTED, border:`1px solid ${BORDER}`, borderRadius:5, padding:'5px 10px', background:'none', cursor:'pointer' }}>
+                      Hide this warning
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -2175,6 +2253,10 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
                 <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or phone..."
                   style={{ width:'100%', background:CARD, border:`1px solid ${BORDER}`, borderRadius:8, padding:'10px 14px 10px 36px', color:CREAM, fontSize:13 }} />
               </div>
+              <button onClick={() => { setAddMember({ name:'', phone:'', email:'', planId:'', startsOn: todayStr, paid:false, amount:'', paymentRef:'', note:'' }); setAddResult(null); }}
+                style={{ padding:'10px 16px', background:ORANGE, border:'none', color:'#fff', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:6, minHeight:44 }}>
+                <UserPlus size={13} strokeWidth={2} /> Add member
+              </button>
               <button onClick={exportMembersCSV} className="abtn"
                 style={{ padding:'10px 16px', background:CARD, border:`1px solid ${BORDER}`, color:CREAM, borderRadius:8, fontSize:12, fontWeight:500, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0, display:'flex', alignItems:'center', gap:6 }}>
                 <Download size={13} strokeWidth={1.5} /> Members CSV
@@ -3083,6 +3165,155 @@ They have no bookings and no payments, so nothing is lost. This cannot be undone
 
       </div>
       </div>
+
+      {/* ════ ADD MEMBER ════
+          The door that did not exist. Everything else in the system puts a
+          member on a pack by taking a payment, which left two situations with
+          no answer: money captured but no account, and giving a place away. */}
+      {addMember && (() => {
+        const f = addMember!;
+        const set = (k: keyof typeof f, v: string | boolean) => setAddMember({ ...f, [k]: v } as typeof f);
+        const chosen = plans.find(p => p.id === f.planId);
+        const inp = { background:DARK, border:`1px solid ${BORDER}`, borderRadius:8,
+          padding:'11px 13px', color:CREAM, fontSize:16, width:'100%', minHeight:44 } as const;
+        const lbl = { fontSize:10.5, color:MUTED, textTransform:'uppercase' as const,
+          letterSpacing:'.11em', fontWeight:600, display:'block', marginBottom:5 };
+        const incomplete = addBusy || !f.name.trim() || !f.phone.trim() || !f.planId;
+        return (
+        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setAddMember(null); }}>
+          <div className="modal-box" style={{ maxWidth:470, padding:0, maxHeight:'88vh', display:'flex', flexDirection:'column' }}>
+            <div style={{ padding:'20px 22px 14px', borderBottom:`1px solid ${BORDER}` }}>
+              <div style={{ fontSize:16, fontWeight:600, color:CREAM }}>Add a member</div>
+              <div style={{ fontSize:12, color:MUTED, marginTop:3 }}>
+                Puts someone on a pack without a payment — for a free place, or when money arrived but the account never did.
+              </div>
+            </div>
+
+            <div style={{ overflowY:'auto', padding:'18px 22px', display:'flex', flexDirection:'column', gap:14 }}>
+              <div>
+                <label style={lbl}>Name</label>
+                <input value={f.name} onChange={e => set('name', e.target.value)} style={inp} placeholder="Full name" />
+              </div>
+              <div>
+                <label style={lbl}>Phone</label>
+                <input value={f.phone} onChange={e => set('phone', e.target.value)} style={inp}
+                  inputMode="numeric" placeholder="10-digit mobile" />
+                <div style={{ fontSize:11, color:MUTED, marginTop:5 }}>
+                  If this number is already a member, the pack is added to them and nothing else about their account changes.
+                </div>
+              </div>
+              <div>
+                <label style={lbl}>Email — optional</label>
+                <input value={f.email} onChange={e => set('email', e.target.value)} style={inp} placeholder="optional" />
+              </div>
+              <div>
+                <label style={lbl}>Pack</label>
+                <select value={f.planId} onChange={e => set('planId', e.target.value)} style={inp}>
+                  <option value="">Choose a pack…</option>
+                  {plans.map(p => (
+                    <option key={p.id} value={p.id}>{p.name.trim()} — {p.duration_days} days</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Starts on</label>
+                <input type="date" value={f.startsOn} onChange={e => set('startsOn', e.target.value)} style={inp} />
+                {chosen && (
+                  <div style={{ fontSize:11, color:MUTED, marginTop:5 }}>
+                    Runs {chosen.duration_days} days, so it ends {fmtDate(new Date(new Date(f.startsOn + 'T00:00:00').getTime() + chosen.duration_days * 86400000).toISOString().split('T')[0])}.
+                  </div>
+                )}
+              </div>
+
+              {/* Money is opt-in. A free place must not land in the revenue
+                  figures, and a stuck payment must not be recorded as zero. */}
+              <label style={{ display:'flex', alignItems:'center', gap:9, cursor:'pointer', minHeight:44 }}>
+                <input type="checkbox" checked={f.paid} onChange={e => set('paid', e.target.checked)}
+                  style={{ width:17, height:17, accentColor:ORANGE }} />
+                <span style={{ fontSize:13, color:CREAM }}>They already paid for this</span>
+              </label>
+
+              {f.paid && (
+                <div style={{ display:'flex', flexDirection:'column', gap:12, padding:'13px', borderRadius:8,
+                  background:'rgba(251,191,36,.06)', border:'1px solid rgba(251,191,36,.25)' }}>
+                  <div style={{ fontSize:11.5, color:'#fbbf24', lineHeight:1.5 }}>
+                    Use this for a payment that went through but never created an account. The amount keeps your
+                    revenue correct, and the payment ID clears the warning from your Dashboard.
+                  </div>
+                  <div>
+                    <label style={lbl}>Amount paid (₹)</label>
+                    <input value={f.amount} onChange={e => set('amount', e.target.value)} style={inp}
+                      inputMode="decimal" placeholder="2360" />
+                  </div>
+                  <div>
+                    <label style={lbl}>Razorpay payment ID — optional</label>
+                    <input value={f.paymentRef} onChange={e => set('paymentRef', e.target.value)} style={inp}
+                      placeholder="pay_…" />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label style={lbl}>Note — optional, for your records</label>
+                <input value={f.note} onChange={e => set('note', e.target.value)} style={inp}
+                  placeholder="why this was added by hand" />
+              </div>
+            </div>
+
+            <div style={{ padding:'14px 22px', borderTop:`1px solid ${BORDER}`, display:'flex', flexDirection:'column', gap:9 }}>
+              <button onClick={submitAddMember} disabled={incomplete}
+                style={{ minHeight:44, padding:'12px', background:ORANGE, color:'#fff', border:'none', borderRadius:8,
+                  fontSize:14, fontWeight:600, cursor: incomplete ? 'not-allowed' : 'pointer', opacity: incomplete ? .5 : 1 }}>
+                {addBusy ? 'Adding…' : 'Add member'}
+              </button>
+              <button onClick={() => setAddMember(null)}
+                style={{ minHeight:44, padding:'11px', background:'none', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:8, fontSize:13, cursor:'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
+
+      {/* The password exists only in that one response. Nothing sends it for
+          the studio while WhatsApp is off, so it has to be shown and passed on. */}
+      {addResult && (
+        <div className="modal-bg" onClick={e => { if (e.target === e.currentTarget) setAddResult(null); }}>
+          <div className="modal-box" style={{ maxWidth:400, padding:'24px' }}>
+            <div style={{ fontSize:16, fontWeight:600, color:'#4ade80', marginBottom:6 }}>
+              {addResult.existing_member ? 'Pack added' : 'Member added'}
+            </div>
+            <div style={{ fontSize:13, color:CREAM, marginBottom:3 }}>{addResult.name}</div>
+            <div style={{ fontSize:12, color:MUTED, marginBottom:16 }}>
+              {addResult.pack} · runs to {fmtDate(addResult.expires_on)}
+            </div>
+            {addResult.password ? (
+              <div style={{ padding:'13px', borderRadius:8, background:'rgba(251,191,36,.07)', border:'1px solid rgba(251,191,36,.28)', marginBottom:16 }}>
+                <div style={{ fontSize:11.5, color:'#fbbf24', marginBottom:8, lineHeight:1.5 }}>
+                  Send them this password — it is shown once and cannot be read again. They will be asked to change it when they log in.
+                </div>
+                <div style={{ fontSize:18, fontWeight:700, color:CREAM, letterSpacing:'.06em', fontFamily:'monospace', textAlign:'center', padding:'8px 0' }}>
+                  {addResult.password}
+                </div>
+                <a href={`https://wa.me/${addResult.phone}?text=${encodeURIComponent(`Hi ${addResult.name.split(' ')[0]}, your AZDAH account is ready. Log in at https://www.azdah.in/login with your number and this password: ${addResult.password} — you will be asked to change it.`)}`}
+                  target="_blank" rel="noopener"
+                  style={{ display:'block', textAlign:'center', marginTop:6, fontSize:12, fontWeight:600, color:'#4ade80', border:'1px solid rgba(74,222,128,.3)', borderRadius:7, padding:'10px', textDecoration:'none', minHeight:44, lineHeight:'24px' }}>
+                  Send it on WhatsApp
+                </a>
+              </div>
+            ) : (
+              <div style={{ fontSize:12.5, color:MUTED, marginBottom:16, lineHeight:1.5 }}>
+                They already had an account, so their existing password still works. Nothing else about it changed.
+              </div>
+            )}
+            <button onClick={() => setAddResult(null)}
+              style={{ minHeight:44, width:'100%', padding:'11px', background:'none', border:`1px solid ${BORDER}`, color:MUTED, borderRadius:8, fontSize:13, cursor:'pointer' }}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ════ MEMBER HISTORY ════ */}
       {historyFor && (() => {
